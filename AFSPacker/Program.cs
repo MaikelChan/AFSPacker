@@ -1,4 +1,5 @@
 ﻿using System;
+using System.Reflection;
 
 namespace AFSPacker
 {
@@ -72,35 +73,37 @@ namespace AFSPacker
             Console.ForegroundColor = ConsoleColor.Gray;
 
 #if DEBUG
-            Console.Read();
+            Console.ReadLine();
 #endif
         }
 
         static void ShowHeader()
         {
-            Version version = System.Reflection.Assembly.GetExecutingAssembly().GetName().Version;
+            Version version = Assembly.GetExecutingAssembly().GetName().Version;
             string v = $"{version.Major}.{version.Minor}.{version.Build}";
 
             Console.ForegroundColor = ConsoleColor.Yellow;
 
             Console.WriteLine();
-            Console.WriteLine("      #----------------------------------------------------------------#");
-            Console.WriteLine("      #                   AFS Packer - Version " + v + "                   #");
-            Console.Write("      #      By PacoChan - ");
+            Console.WriteLine("        #----------------------------------------------------------------#");
+            Console.WriteLine("        #                   AFS Packer - Version " + v + "                   #");
+            Console.Write("        #      By PacoChan - ");
             Console.ForegroundColor = ConsoleColor.Cyan;
             Console.Write("https://github.com/MaikelChan/AFSPacker");
             Console.ForegroundColor = ConsoleColor.Yellow;
             Console.WriteLine("     #");
-            Console.WriteLine("      #----------------------------------------------------------------#\n\n");
+            Console.WriteLine("        #----------------------------------------------------------------#\n\n");
         }
 
         static void ShowUsage()
         {
-            Console.ForegroundColor = ConsoleColor.White;
+            Console.ForegroundColor = ConsoleColor.Gray;
 
             Console.WriteLine("Usage:\n");
 
-            Console.WriteLine("  AFSPacker -e <input_file> <ouput_dir> [list_file]         :  Extract AFS archive\n");
+            Console.ForegroundColor = ConsoleColor.White;
+
+            Console.WriteLine("  AFSPacker -e <input_file> <ouput_dir> [list_file]         :  Extract AFS archive");
             Console.WriteLine("  AFSPacker -c <input_dir> <output_file> [list_file] [-nf]  :  Create AFS archive\n");
 
             Console.ForegroundColor = ConsoleColor.Gray;
@@ -109,13 +112,14 @@ namespace AFSPacker
             Console.WriteLine("               files that will be extracted/imported from/to the AFS archive.");
             Console.WriteLine("               This is useful if you need the files to be in the same");
             Console.WriteLine("               order as in the original AFS (required for Shenmue 1 & 2).\n");
+
             Console.WriteLine("          -nf: will create the AFS archive with no filenames. This is useful for");
             Console.WriteLine("               some games like Resident Evil: Code Veronica, that have AFS");
             Console.WriteLine("               archives with files that don't preserve their file names,");
             Console.WriteLine("               creation dates, etc.\n\n");
 
 #if DEBUG
-            Console.Read();
+            Console.ReadLine();
 #endif
         }
     }
