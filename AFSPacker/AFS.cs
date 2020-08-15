@@ -5,13 +5,13 @@ using System.Text;
 
 namespace AFSPacker
 {
-    class AFS
+    static class AFS
     {
         const uint HEADER_MAGIC_1 = 0x00534641; // AFS
         const uint HEADER_MAGIC_2 = 0x20534641;
         const string NULL_FILE = "#NULL#";
 
-        public void CreateAFS(string inputDirectory, string outputFile, string filesList = null, bool preserveFileNames = true)
+        public static void CreateAFS(string inputDirectory, string outputFile, string filesList = null, bool preserveFileNames = true)
         {
             Console.ForegroundColor = ConsoleColor.White;
             Console.WriteLine("Packaging files...\n\n");
@@ -164,7 +164,7 @@ namespace AFSPacker
             }
         }
 
-        public void ExtractAFS(string inputFile, string outputDirectory, string filesList = null)
+        public static void ExtractAFS(string inputFile, string outputDirectory, string filesList = null)
         {
             bool areThereAttributes = true;
 
@@ -307,13 +307,13 @@ namespace AFSPacker
             }
         }
 
-        uint Pad(uint value, uint padBytes)
+        static uint Pad(uint value, uint padBytes)
         {
             if ((value % padBytes) != 0) return value + (padBytes - (value % padBytes));
             else return value;
         }
 
-        string[] CheckForDuplicatedFilenames(string[] fileNames)
+        static string[] CheckForDuplicatedFilenames(string[] fileNames)
         {
             string[] output = new string[fileNames.Length];
 

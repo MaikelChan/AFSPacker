@@ -21,11 +21,9 @@ namespace AFSPacker
             {
                 try
                 {
-                    AFS afs = new AFS();
-
                     if (args.Length == 3)
                     {
-                        afs.CreateAFS(args[1], args[2]);
+                        AFS.CreateAFS(args[1], args[2]);
                     }
                     else
                     {
@@ -39,7 +37,7 @@ namespace AFSPacker
                             else { ShowUsage(); return; }
                         }
 
-                        afs.CreateAFS(args[1], args[2], listfile, preserveFileNames);
+                        AFS.CreateAFS(args[1], args[2], listfile, preserveFileNames);
                     }
 
                     Console.ForegroundColor = ConsoleColor.Green;
@@ -55,10 +53,8 @@ namespace AFSPacker
             {
                 try
                 {
-                    AFS afs = new AFS();
-
-                    if (args.Length == 3) afs.ExtractAFS(args[1], args[2]);
-                    else afs.ExtractAFS(args[1], args[2], args[3]);
+                    if (args.Length == 3) AFS.ExtractAFS(args[1], args[2]);
+                    else AFS.ExtractAFS(args[1], args[2], args[3]);
 
                     Console.ForegroundColor = ConsoleColor.Green;
                     Console.WriteLine("\n\nOperation complete.");
