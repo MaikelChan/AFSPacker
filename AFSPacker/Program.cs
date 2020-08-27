@@ -99,7 +99,7 @@ namespace AFSPacker
 
             Console.ForegroundColor = ConsoleColor.White;
 
-            Console.WriteLine("  AFSPacker -e <input_file> <ouput_dir> [list_file]         :  Extract AFS archive");
+            Console.WriteLine("  AFSPacker -e <input_file> <output_dir> [list_file]        :  Extract AFS archive");
             Console.WriteLine("  AFSPacker -c <input_dir> <output_file> [list_file] [-nf]  :  Create AFS archive\n");
 
             Console.ForegroundColor = ConsoleColor.Gray;

@@ -6,7 +6,7 @@ The program requires the .NET Framework 4.7.2.
 
 ## Usage
 ```
-AFSPacker -e <input_file> <ouput_dir> [list_file]         :  Extract AFS archive
+AFSPacker -e <input_file> <output_dir> [list_file]         :  Extract AFS archive
 AFSPacker -c <input_dir> <output_file> [list_file] [-nf]  :  Create AFS archive
 
     list_file: will create or read a text file containing a list of all the
