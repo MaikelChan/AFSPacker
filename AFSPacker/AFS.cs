@@ -38,7 +38,7 @@ namespace AFSPacker
                 TableOfContents[] toc = new TableOfContents[inputFiles.Length];
                 FileAttributes[] attributes = new FileAttributes[inputFiles.Length];
 
-                uint currentOffset = Pad((uint)(8 + (8 * inputFiles.Length) + 8), 0x800);  // Header + TOC + AttributeTable Offset and size
+                uint currentOffset = Utils.Pad((uint)(8 + (8 * inputFiles.Length) + 8), 0x800);  // Header + TOC + AttributeTable Offset and size
 
                 for (int n = 0; n < inputFiles.Length; n++)
                 {
@@ -69,7 +69,7 @@ namespace AFSPacker
                         toc[n].Offset = currentOffset;
 
                         currentOffset += toc[n].FileSize;
-                        currentOffset = Pad(currentOffset, 0x800);
+                        currentOffset = Utils.Pad(currentOffset, 0x800);
 
                         if (preserveFileNames)
                         {
@@ -122,9 +122,12 @@ namespace AFSPacker
                 {
                     if (inputFiles[n] != NULL_FILE)
                     {
-                        byte[] data = File.ReadAllBytes(inputFiles[n]);
                         fs1.Seek(toc[n].Offset, SeekOrigin.Begin);
-                        fs1.Write(data, 0, data.Length);
+
+                        using (FileStream fs = File.OpenRead(inputFiles[n]))
+                        {
+                            fs.CopyTo(fs1);
+                        }
                     }
 
                     Console.CursorLeft = 0;
@@ -159,7 +162,7 @@ namespace AFSPacker
 
                 //Pad final 0s
                 long currentPosition = fs1.Position;
-                long eof = Pad((uint)fs1.Position, 0x800);
+                long eof = Utils.Pad((uint)fs1.Position, 0x800);
                 for (long n = currentPosition; n < eof; n++) bw.Write((byte)0);
             }
         }
@@ -270,9 +273,7 @@ namespace AFSPacker
                     Console.CursorLeft = 0;
                     Console.WriteLine($"\nReading files... {n}/{numberOfFiles - 1}");
 
-                    byte[] filedata = new byte[toc[n].FileSize];
                     fs1.Seek(toc[n].Offset, SeekOrigin.Begin);
-                    fs1.Read(filedata, 0, filedata.Length);
 
                     string outputFile = Path.Combine(outputDirectory, fileName[n]);
                     if (File.Exists(outputFile))
@@ -281,7 +282,11 @@ namespace AFSPacker
                         Console.WriteLine($"Warning: File \"{outputFile}\" already exists. Overwriting.");
                         Console.ForegroundColor = ConsoleColor.White;
                     }
-                    File.WriteAllBytes(outputFile, filedata);
+
+                    using (FileStream fs = File.OpenWrite(outputFile))
+                    {
+                        fs1.CopySliceTo(fs, (int)toc[n].FileSize);
+                    }
 
                     if (areThereAttributes)
                     {
@@ -305,12 +310,6 @@ namespace AFSPacker
 
                 if (!string.IsNullOrEmpty(filesList)) File.WriteAllLines(filesList, filelist);
             }
-        }
-
-        static uint Pad(uint value, uint padBytes)
-        {
-            if ((value % padBytes) != 0) return value + (padBytes - (value % padBytes));
-            else return value;
         }
 
         static string[] CheckForDuplicatedFilenames(string[] fileNames)

@@ -21,6 +21,9 @@ AFSPacker -c <input_dir> <output_file> [list_file] [-nf]  :  Create AFS archive
 ```
 
 ## Changelog
+### [1.2.2] - 2020-08-28
+- Memory usage optimizations.
+
 ### [1.2.1] - 2019-11-16
 - Fixed error when extracting files that contain invalid dates. Those dates will be ignored.
 
