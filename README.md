@@ -19,22 +19,3 @@ AFSPacker -c <input_dir> <output_file> [list_file] [-nf]  :  Create AFS archive
                archives with files that don't preserve their file names,
                creation dates, etc.
 ```
-
-## Changelog
-### [1.2.2] - 2020-08-28
-- Memory usage optimizations.
-
-### [1.2.1] - 2019-11-16
-- Fixed error when extracting files that contain invalid dates. Those dates will be ignored.
-
-### [1.2.0] - 2015-01-16
-- Able to extract AFS archives with null files.
-- Able to extract multiple files with the same name. They will be automatically renamed.
-- Able to create AFS archives that ignore filenames and other metadata. Useful for games like Resident Evil: Code Veronica, where AFS archives don't contain any filenames, creation dates, etc.
-- Some small fixes.
-
-### [1.1.0] - 2012-06-18
-- Fixed a crash reading AFS archives in games like Arc Rise Fantasia.
-
-### [1.0.0]
-- Initial release.
