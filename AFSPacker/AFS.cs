@@ -11,10 +11,14 @@ namespace AFSPacker
         const uint HEADER_MAGIC_2 = 0x20534641;
         const string NULL_FILE = "#NULL#";
 
+        public enum NotificationTypes { Info, Warning, Error }
+
+        public delegate void NotifyProgressDelegate(NotificationTypes type, string message);
+        public static event NotifyProgressDelegate NotifyProgress;
+
         public static void CreateAFS(string inputDirectory, string outputFile, string filesList = null, bool preserveFileNames = true)
         {
-            Console.ForegroundColor = ConsoleColor.White;
-            Console.WriteLine("Packaging files...\n\n");
+            NotifyProgress?.Invoke(NotificationTypes.Info, "Packaging files...");
 
             string[] inputFiles;
 
@@ -85,12 +89,9 @@ namespace AFSPacker
                         }
                     }
 
-                    Console.CursorLeft = 0;
-                    if (preserveFileNames) Console.Write($"Processing TOC and attributes... {n}/{inputFiles.Length - 1}");
-                    else Console.Write($"Processing TOC... {n}/{inputFiles.Length - 1}");
+                    if (preserveFileNames) NotifyProgress?.Invoke(NotificationTypes.Info, $"Processing TOC and attributes... {n}/{inputFiles.Length - 1}");
+                    else NotifyProgress?.Invoke(NotificationTypes.Info, $"Processing TOC... {n}/{inputFiles.Length - 1}");
                 }
-
-                Console.WriteLine();
 
                 //Write TOC to file
                 for (int n = 0; n < inputFiles.Length; n++)
@@ -98,11 +99,8 @@ namespace AFSPacker
                     bw.Write(toc[n].Offset);
                     bw.Write(toc[n].FileSize);
 
-                    Console.CursorLeft = 0;
-                    Console.Write($"Writing TOC... {n}/{inputFiles.Length - 1}");
+                    NotifyProgress?.Invoke(NotificationTypes.Info, $"Writing TOC... {n}/{inputFiles.Length - 1}");
                 }
-
-                Console.WriteLine();
 
                 uint attributeTableOffset = 0;
                 uint attributeTableSize = 0;
@@ -130,11 +128,8 @@ namespace AFSPacker
                         }
                     }
 
-                    Console.CursorLeft = 0;
-                    Console.Write($"Writing files... {n}/{inputFiles.Length - 1}");
+                    NotifyProgress?.Invoke(NotificationTypes.Info, $"Writing files... {n}/{inputFiles.Length - 1}");
                 }
-
-                Console.WriteLine();
 
                 if (preserveFileNames)
                 {
@@ -154,10 +149,8 @@ namespace AFSPacker
                         bw.Write(attributes[n].Second);
                         bw.Write(attributes[n].FileSize);
 
-                        Console.CursorLeft = 0;
-                        Console.Write($"Writing attributes... {n}/{inputFiles.Length - 1}");
+                        NotifyProgress?.Invoke(NotificationTypes.Info, $"Writing attributes... {n}/{inputFiles.Length - 1}");
                     }
-                    Console.WriteLine();
                 }
 
                 //Pad final 0s
@@ -177,13 +170,11 @@ namespace AFSPacker
                 uint magic = br.ReadUInt32();
                 if (magic != HEADER_MAGIC_1 && magic != HEADER_MAGIC_2) //If Magic is different than AFS
                 {
-                    Console.ForegroundColor = ConsoleColor.Red;
-                    Console.WriteLine("Error: Input file doesn't seem to be a valid AFS file.");
+                    NotifyProgress?.Invoke(NotificationTypes.Error, "Input file doesn't seem to be a valid AFS file.");
                     return;
                 }
 
-                Console.ForegroundColor = ConsoleColor.White;
-                Console.WriteLine("Extracting files...\n\n");
+                NotifyProgress?.Invoke(NotificationTypes.Info, "Extracting files...");
 
                 uint numberOfFiles = br.ReadUInt32();
 
@@ -196,11 +187,8 @@ namespace AFSPacker
                     toc[n].Offset = br.ReadUInt32();
                     toc[n].FileSize = br.ReadUInt32();
 
-                    Console.CursorLeft = 0;
-                    Console.Write($"Reading TOC... {n}/{numberOfFiles - 1}");
+                    NotifyProgress?.Invoke(NotificationTypes.Info, $"Reading TOC... {n}/{numberOfFiles - 1}");
                 }
-
-                Console.WriteLine();
 
                 //Read Filename Directory Offset and Size
                 uint attributeTableOffset = 0;
@@ -235,8 +223,7 @@ namespace AFSPacker
                         atrributes[n].Second = br.ReadUInt16();
                         atrributes[n].FileSize = br.ReadUInt32();
 
-                        Console.CursorLeft = 0;
-                        Console.Write($"Reading attributes table... {n}/{numberOfFiles - 1}");
+                        NotifyProgress?.Invoke(NotificationTypes.Info, $"Reading attributes table... {n}/{numberOfFiles - 1}");
                     }
 
                     fileName = CheckForDuplicatedFilenames(fileName);
@@ -249,9 +236,6 @@ namespace AFSPacker
                     }
                 }
 
-                Console.WriteLine();
-                Console.WriteLine();
-
                 //Extract files
                 if (!Directory.Exists(outputDirectory)) Directory.CreateDirectory(outputDirectory);
 
@@ -261,26 +245,21 @@ namespace AFSPacker
                 {
                     if (toc[n].FileSize == 0 && toc[n].Offset == 0)
                     {
-                        Console.ForegroundColor = ConsoleColor.Magenta;
-                        Console.WriteLine($"Warning: File \"{n}\" is a null file; Skipping.\n");
-                        Console.ForegroundColor = ConsoleColor.White;
+                        NotifyProgress?.Invoke(NotificationTypes.Warning, $"File \"{n}\" is a null file; Skipping.");
 
                         filelist[n] = NULL_FILE;
 
                         continue;
                     }
 
-                    Console.CursorLeft = 0;
-                    Console.WriteLine($"\nReading files... {n}/{numberOfFiles - 1}");
+                    NotifyProgress?.Invoke(NotificationTypes.Info, $"Reading files... {n}/{numberOfFiles - 1}");
 
                     fs1.Seek(toc[n].Offset, SeekOrigin.Begin);
 
                     string outputFile = Path.Combine(outputDirectory, fileName[n]);
                     if (File.Exists(outputFile))
                     {
-                        Console.ForegroundColor = ConsoleColor.Magenta;
-                        Console.WriteLine($"Warning: File \"{outputFile}\" already exists. Overwriting.");
-                        Console.ForegroundColor = ConsoleColor.White;
+                        NotifyProgress?.Invoke(NotificationTypes.Warning, $"File \"{outputFile}\" already exists. Overwriting.");
                     }
 
                     using (FileStream fs = File.OpenWrite(outputFile))
@@ -297,16 +276,12 @@ namespace AFSPacker
                         }
                         catch (ArgumentOutOfRangeException)
                         {
-                            Console.ForegroundColor = ConsoleColor.Magenta;
-                            Console.WriteLine("Warning: Invalid date. Ignoring.");
-                            Console.ForegroundColor = ConsoleColor.White;
+                            NotifyProgress?.Invoke(NotificationTypes.Warning, "Invalid date. Ignoring.");
                         }
                     }
 
                     filelist[n] = outputFile; //Save the list of files in order to have the original order
                 }
-
-                Console.WriteLine();
 
                 if (!string.IsNullOrEmpty(filesList)) File.WriteAllLines(filesList, filelist);
             }

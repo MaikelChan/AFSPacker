@@ -15,7 +15,7 @@ namespace AFSPacker
                 return;
             }
 
-            Console.ForegroundColor = ConsoleColor.White;
+            AFS.NotifyProgress += Progress;
 
             if (args[0] == "-c")
             {
@@ -46,7 +46,7 @@ namespace AFSPacker
                 catch (Exception e)
                 {
                     Console.ForegroundColor = ConsoleColor.Red;
-                    Console.WriteLine("\n\nError: " + e.Message);
+                    Console.WriteLine("\n\n[Error] " + e.Message);
                 }
             }
             else if (args[0] == "-e")
@@ -62,15 +62,35 @@ namespace AFSPacker
                 catch (Exception e)
                 {
                     Console.ForegroundColor = ConsoleColor.Red;
-                    Console.WriteLine("\n\nError: " + e.Message);
+                    Console.WriteLine("\n\n[Error] " + e.Message);
                 }
             }
+
+            AFS.NotifyProgress -= Progress;
 
             Console.ForegroundColor = ConsoleColor.Gray;
 
 #if DEBUG
             Console.ReadLine();
 #endif
+        }
+
+        static void Progress(AFS.NotificationTypes type, string message)
+        {
+            switch (type)
+            {
+                case AFS.NotificationTypes.Info:
+                    Console.ForegroundColor = ConsoleColor.White;
+                    break;
+                case AFS.NotificationTypes.Warning:
+                    Console.ForegroundColor = ConsoleColor.Magenta;
+                    break;
+                case AFS.NotificationTypes.Error:
+                    Console.ForegroundColor = ConsoleColor.Red;
+                    break;
+            }
+
+            Console.WriteLine($"[{type}] {message}");
         }
 
         static void ShowHeader()
