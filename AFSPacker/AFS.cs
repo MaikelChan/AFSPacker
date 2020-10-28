@@ -162,8 +162,6 @@ namespace AFSPacker
 
         public static void ExtractAFS(string inputFile, string outputDirectory, string filesList = null)
         {
-            bool areThereAttributes = true;
-
             using (FileStream fs1 = new FileStream(inputFile, FileMode.Open, FileAccess.Read))
             using (BinaryReader br = new BinaryReader(fs1))
             {
@@ -191,16 +189,33 @@ namespace AFSPacker
                 }
 
                 //Read Filename Directory Offset and Size
+                bool areThereAttributes = false;
                 uint attributeTableOffset = 0;
                 uint attributeTableSize = 0;
-                while (fs1.Position < toc[0].Offset && attributeTableOffset == 0)
-                {
-                    //fs1.Seek(TOC[0].Offset - 8, SeekOrigin.Begin);
-                    attributeTableOffset = br.ReadUInt32();
-                    attributeTableSize = br.ReadUInt32();
-                }
 
-                if (attributeTableOffset == 0) areThereAttributes = false;
+                while (fs1.Position < toc[0].Offset - 4)
+                {
+                    uint offset = br.ReadUInt32();
+                    uint size = br.ReadUInt32();
+
+                    // If zeroes are found, keep searching for attribute data.
+                    // Sometimes it's at the begenning of the block and sometimes at the end.
+                    if (offset == 0) continue;
+                    if (size == 0) continue;
+
+                    // Check if this data makes sense, as there are times where random data can be found
+                    // instead of attribute offset and size. If not, let's assume there's no attribute data.
+                    uint lastFileEndOffset = toc[numberOfFiles - 1].Offset + toc[numberOfFiles - 1].FileSize;
+                    if (size > fs1.Length - lastFileEndOffset) break;
+                    if (offset < lastFileEndOffset) break;
+                    if (offset > fs1.Length - size) break;
+
+                    // If the above conditions are not met, it looks like it's valid attribute data
+                    areThereAttributes = true;
+                    attributeTableOffset = offset;
+                    attributeTableSize = size;
+                    break;
+                }
 
                 string[] fileName = new string[numberOfFiles];
 
