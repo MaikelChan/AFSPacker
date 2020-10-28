@@ -18,9 +18,9 @@ namespace AFSPacker
 
             AFS.NotifyProgress += Progress;
 
-            if (args[0] == "-c")
+            try
             {
-                try
+                if (args[0] == "-c")
                 {
                     if (args.Length == 3)
                     {
@@ -40,47 +40,29 @@ namespace AFSPacker
 
                         AFS.CreateAFS(args[1], args[2], listfile, preserveFileNames);
                     }
-
-                    Console.ForegroundColor = ConsoleColor.Green;
-                    Console.WriteLine("\n\nOperation complete.");
                 }
-                catch (Exception e)
-                {
-                    Console.ForegroundColor = ConsoleColor.Red;
-                    Console.WriteLine("\n\n[Error] " + e.Message);
-                }
-            }
-            else if (args[0] == "-e")
-            {
-                try
+                else if (args[0] == "-e")
                 {
                     if (args.Length == 3) AFS.ExtractAFS(args[1], args[2]);
                     else AFS.ExtractAFS(args[1], args[2], args[3]);
-
-                    Console.ForegroundColor = ConsoleColor.Green;
-                    Console.WriteLine("\n\nOperation complete.");
                 }
-                catch (Exception e)
-                {
-                    Console.ForegroundColor = ConsoleColor.Red;
-                    Console.WriteLine("\n\n[Error] " + e.Message);
-                }
+            }
+            catch (Exception e)
+            {
+                Console.WriteLine();
+                Progress(AFS.NotificationTypes.Error, e.Message);
             }
 
             AFS.NotifyProgress -= Progress;
 
             Console.ForegroundColor = ConsoleColor.Gray;
-
-#if DEBUG
-            Console.ReadLine();
-#endif
         }
 
         static void Progress(AFS.NotificationTypes type, string message)
         {
             switch (type)
             {
-                case AFS.NotificationTypes.Info:
+                default:
                     Console.ForegroundColor = ConsoleColor.White;
                     break;
                 case AFS.NotificationTypes.Warning:
@@ -89,9 +71,12 @@ namespace AFSPacker
                 case AFS.NotificationTypes.Error:
                     Console.ForegroundColor = ConsoleColor.Red;
                     break;
+                case AFS.NotificationTypes.Success:
+                    Console.ForegroundColor = ConsoleColor.Green;
+                    break;
             }
 
-            Console.WriteLine($"[{type}] {message}");
+            Console.WriteLine($"[{DateTime.Now.ToLongTimeString()}] [{type}] {message}");
         }
 
         static void ShowHeader()

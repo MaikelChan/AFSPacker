@@ -11,13 +11,38 @@ namespace AFSLib
         const uint HEADER_MAGIC_2 = 0x20534641;
         const string NULL_FILE = "#NULL#";
 
-        public enum NotificationTypes { Info, Warning, Error }
+        public enum NotificationTypes { Info, Warning, Error, Success }
 
         public delegate void NotifyProgressDelegate(NotificationTypes type, string message);
         public static event NotifyProgressDelegate NotifyProgress;
 
-        public static void CreateAFS(string inputDirectory, string outputFile, string filesList = null, bool preserveFileNames = true)
+        public static void CreateAFS(string inputDirectory, string outputFile)
         {
+            if (string.IsNullOrEmpty(inputDirectory))
+            {
+                throw new ArgumentNullException(nameof(inputDirectory));
+            }
+
+            if (!Directory.Exists(inputDirectory))
+            {
+                throw new DirectoryNotFoundException("The following directory has not been found: " + inputDirectory);
+            }
+
+            if (string.IsNullOrEmpty(outputFile))
+            {
+                throw new ArgumentNullException(nameof(outputFile));
+            }
+
+            CreateAFS(inputDirectory, outputFile, null, true);
+        }
+
+        public static void CreateAFS(string inputDirectory, string outputFile, string filesList, bool preserveFileNames)
+        {
+            if (filesList != null && !File.Exists(filesList))
+            {
+                throw new FileNotFoundException("The following file has not been found: " + filesList);
+            }
+
             NotifyProgress?.Invoke(NotificationTypes.Info, "Packaging files...");
 
             string[] inputFiles;
@@ -158,10 +183,37 @@ namespace AFSLib
                 long eof = Utils.Pad((uint)fs1.Position, 0x800);
                 for (long n = currentPosition; n < eof; n++) bw.Write((byte)0);
             }
+
+            NotifyProgress?.Invoke(NotificationTypes.Success, $"\"{Path.GetFileName(outputFile)}\" has been created successfully.");
         }
 
-        public static void ExtractAFS(string inputFile, string outputDirectory, string filesList = null)
+        public static void ExtractAFS(string inputFile, string outputDirectory)
         {
+            if (string.IsNullOrEmpty(inputFile))
+            {
+                throw new ArgumentNullException(nameof(inputFile));
+            }
+
+            if (!File.Exists(inputFile))
+            {
+                throw new FileNotFoundException("The following file has not been found: " + inputFile);
+            }
+
+            if (string.IsNullOrEmpty(outputDirectory))
+            {
+                throw new ArgumentNullException(nameof(outputDirectory));
+            }
+
+            ExtractAFS(inputFile, outputDirectory, null);
+        }
+
+        public static void ExtractAFS(string inputFile, string outputDirectory, string filesList)
+        {
+            if (filesList != null && !File.Exists(filesList))
+            {
+                throw new FileNotFoundException("The following file has not been found: " + filesList);
+            }
+
             using (FileStream fs1 = new FileStream(inputFile, FileMode.Open, FileAccess.Read))
             using (BinaryReader br = new BinaryReader(fs1))
             {
@@ -218,7 +270,10 @@ namespace AFSLib
                     break;
                 }
 
-                string[] fileName = new string[numberOfFiles];
+                if (areThereAttributes) NotifyProgress?.Invoke(NotificationTypes.Info, $"Attributes table found at 0x{attributeTableOffset:X8}.");
+                else NotifyProgress?.Invoke(NotificationTypes.Info, "Attributes table not found.");
+
+                string[] fileNames = new string[numberOfFiles];
 
                 if (areThereAttributes)
                 {
@@ -229,7 +284,7 @@ namespace AFSLib
                     {
                         byte[] name = new byte[32];
                         fs1.Read(name, 0, name.Length);
-                        fileName[n] = Encoding.Default.GetString(name).Replace("\0", "");
+                        fileNames[n] = Encoding.Default.GetString(name).Replace("\0", "");
 
                         atrributes[n].Year = br.ReadUInt16();
                         atrributes[n].Month = br.ReadUInt16();
@@ -242,13 +297,13 @@ namespace AFSLib
                         NotifyProgress?.Invoke(NotificationTypes.Info, $"Reading attributes table... {n}/{numberOfFiles - 1}");
                     }
 
-                    fileName = CheckForDuplicatedFilenames(fileName);
+                    fileNames = CheckForDuplicatedFilenames(fileNames);
                 }
                 else
                 {
                     for (int n = 0; n < numberOfFiles; n++)
                     {
-                        fileName[n] = n.ToString("00000000", CultureInfo.InvariantCulture);
+                        fileNames[n] = n.ToString("00000000", CultureInfo.InvariantCulture);
                     }
                 }
 
@@ -272,7 +327,7 @@ namespace AFSLib
 
                     fs1.Seek(toc[n].Offset, SeekOrigin.Begin);
 
-                    string outputFile = Path.Combine(outputDirectory, fileName[n]);
+                    string outputFile = Path.Combine(outputDirectory, fileNames[n]);
                     if (File.Exists(outputFile))
                     {
                         NotifyProgress?.Invoke(NotificationTypes.Warning, $"File \"{outputFile}\" already exists. Overwriting.");
@@ -300,6 +355,8 @@ namespace AFSLib
                 }
 
                 if (!string.IsNullOrEmpty(filesList)) File.WriteAllLines(filesList, filelist);
+
+                NotifyProgress?.Invoke(NotificationTypes.Success, $"\"{Path.GetFileName(inputFile)}\" has been extracted successfully.");
             }
         }
 
