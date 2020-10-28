@@ -207,6 +207,7 @@ namespace AFSPacker
                     // instead of attribute offset and size. If not, let's assume there's no attribute data.
                     uint lastFileEndOffset = toc[numberOfFiles - 1].Offset + toc[numberOfFiles - 1].FileSize;
                     if (size > fs1.Length - lastFileEndOffset) break;
+                    if (size < numberOfFiles * 0x30) break;
                     if (offset < lastFileEndOffset) break;
                     if (offset > fs1.Length - size) break;
 
