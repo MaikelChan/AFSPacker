@@ -1,4 +1,5 @@
-﻿using System;
+﻿using AFSLib;
+using System;
 using System.Reflection;
 
 namespace AFSPacker

@@ -1,9 +1,11 @@
 ﻿
 Microsoft Visual Studio Solution File, Format Version 12.00
 # Visual Studio Version 16
-VisualStudioVersion = 16.0.29509.3
+VisualStudioVersion = 16.0.30611.23
 MinimumVisualStudioVersion = 10.0.40219.1
-Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "AFSPacker", "AFSPacker\AFSPacker.csproj", "{4026B135-B71F-4D0E-845F-63565E367DFA}"
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "AFSPacker", "AFSPacker\AFSPacker.csproj", "{CC3648A5-E91F-4CF0-BBA3-10422A17B4D9}"
+EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "AFSLib", "AFSLib\AFSLib.csproj", "{12457AF2-EE52-45F8-AC07-85451250C630}"
 EndProject
 Global
 	GlobalSection(SolutionConfigurationPlatforms) = preSolution
@@ -11,15 +13,19 @@ Global
 		Release|Any CPU = Release|Any CPU
 	EndGlobalSection
 	GlobalSection(ProjectConfigurationPlatforms) = postSolution
-		{4026B135-B71F-4D0E-845F-63565E367DFA}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
-		{4026B135-B71F-4D0E-845F-63565E367DFA}.Debug|Any CPU.Build.0 = Debug|Any CPU
-		{4026B135-B71F-4D0E-845F-63565E367DFA}.Release|Any CPU.ActiveCfg = Release|Any CPU
-		{4026B135-B71F-4D0E-845F-63565E367DFA}.Release|Any CPU.Build.0 = Release|Any CPU
+		{CC3648A5-E91F-4CF0-BBA3-10422A17B4D9}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{CC3648A5-E91F-4CF0-BBA3-10422A17B4D9}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{CC3648A5-E91F-4CF0-BBA3-10422A17B4D9}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{CC3648A5-E91F-4CF0-BBA3-10422A17B4D9}.Release|Any CPU.Build.0 = Release|Any CPU
+		{12457AF2-EE52-45F8-AC07-85451250C630}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{12457AF2-EE52-45F8-AC07-85451250C630}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{12457AF2-EE52-45F8-AC07-85451250C630}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{12457AF2-EE52-45F8-AC07-85451250C630}.Release|Any CPU.Build.0 = Release|Any CPU
 	EndGlobalSection
 	GlobalSection(SolutionProperties) = preSolution
 		HideSolutionNode = FALSE
 	EndGlobalSection
 	GlobalSection(ExtensibilityGlobals) = postSolution
-		SolutionGuid = {FCD33589-24D5-409F-9CE5-61BEFF1A06E3}
+		SolutionGuid = {511E9D1B-A777-4A69-8C6A-750E112A2A10}
 	EndGlobalSection
 EndGlobal

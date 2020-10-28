@@ -3,9 +3,9 @@ using System.Globalization;
 using System.IO;
 using System.Text;
 
-namespace AFSPacker
+namespace AFSLib
 {
-    static class AFS
+    public static class AFS
     {
         const uint HEADER_MAGIC_1 = 0x00534641; // AFS
         const uint HEADER_MAGIC_2 = 0x20534641;

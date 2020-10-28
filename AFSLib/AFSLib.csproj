@@ -1,21 +1,18 @@
 <Project Sdk="Microsoft.NET.Sdk">
 
   <PropertyGroup>
-    <OutputType>Exe</OutputType>
-    <TargetFramework>netcoreapp3.1</TargetFramework>
-    <Version>2.0.0</Version>
+    <TargetFramework>netstandard2.0</TargetFramework>
     <Authors>PacoChan</Authors>
+    <Description>Library to extract and create AFS files.</Description>
+    <AssemblyVersion>2.0.0.0</AssemblyVersion>
+    <FileVersion>2.0.0.0</FileVersion>
+    <Version>2.0.0</Version>
     <Company />
-    <Description>Tool to extract and create AFS files.</Description>
   </PropertyGroup>
 
   <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Release|AnyCPU'">
     <DebugType>none</DebugType>
     <DebugSymbols>false</DebugSymbols>
   </PropertyGroup>
-
-  <ItemGroup>
-    <ProjectReference Include="..\AFSLib\AFSLib.csproj" />
-  </ItemGroup>
 
 </Project>
