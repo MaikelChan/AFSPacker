@@ -2,7 +2,6 @@
 using System.Globalization;
 using System.IO;
 using System.Text;
-using System.Text.Json;
 
 namespace AFSLib
 {
@@ -10,7 +9,6 @@ namespace AFSLib
     {
         const uint HEADER_MAGIC_00 = 0x00534641; // AFS
         const uint HEADER_MAGIC_20 = 0x20534641;
-        const string NULL_FILE = "#NULL#";
 
         public enum NotificationTypes { Info, Warning, Error, Success }
 
@@ -46,23 +44,13 @@ namespace AFSLib
 
             if (File.Exists(metadataFile))
             {
-                string meta = File.ReadAllText(metadataFile);
-                metadata = JsonSerializer.Deserialize<AFSMetadata>(meta);
+                metadata = AFSMetadata.LoadFromFile(metadataFile);
             }
             else
             {
-                NotifyProgress?.Invoke(NotificationTypes.Warning, $"Metadata file has not been found: \"{metadataFile}\". Generated AFS file could be incompatible.");
+                NotifyProgress?.Invoke(NotificationTypes.Warning, $"Metadata file has not been found: \"{metadataFile}\". Creating an AFS file with default settings.");
 
-                string[] inputFiles = Directory.GetFiles(inputDirectory);
-                for (int f = 0; f < inputFiles.Length; f++)
-                {
-                    inputFiles[f] = Path.GetFileName(inputFiles[f]);
-                }
-
-                metadata = new AFSMetadata()
-                {
-                    FileNames = inputFiles
-                };
+                metadata = new AFSMetadata(inputDirectory);
             }
 
             // Start creating the AFS file
@@ -84,7 +72,7 @@ namespace AFSLib
 
                 for (int f = 0; f < metadata.FileCount; f++)
                 {
-                    if (metadata.FileNames[f] == NULL_FILE)
+                    if (metadata.FileNames[f] == string.Empty)
                     {
                         toc[f].FileSize = 0;
                         toc[f].Offset = 0;
@@ -168,7 +156,7 @@ namespace AFSLib
 
                 for (int f = 0; f < metadata.FileCount; f++)
                 {
-                    if (metadata.FileNames[f] != NULL_FILE)
+                    if (metadata.FileNames[f] != string.Empty)
                     {
                         fs1.Seek(toc[f].Offset, SeekOrigin.Begin);
 
@@ -176,9 +164,13 @@ namespace AFSLib
                         {
                             fs.CopyTo(fs1);
                         }
-                    }
 
-                    NotifyProgress?.Invoke(NotificationTypes.Info, $"Writing files... {f + 1}/{metadata.FileCount}");
+                        NotifyProgress?.Invoke(NotificationTypes.Info, $"Writing files... {f + 1}/{metadata.FileCount}");
+                    }
+                    else
+                    {
+                        NotifyProgress?.Invoke(NotificationTypes.Info, $"Null file... {f + 1}/{metadata.FileCount}");
+                    }
                 }
 
                 if (metadata.ContainsAttributes)
@@ -313,19 +305,31 @@ namespace AFSLib
 
                     for (int f = 0; f < fileCount; f++)
                     {
-                        byte[] name = new byte[32];
-                        fs1.Read(name, 0, name.Length);
-                        fileNames[f] = Encoding.Default.GetString(name).Replace("\0", "");
+                        if (toc[f].IsNullEntry)
+                        {
+                            NotifyProgress?.Invoke(NotificationTypes.Warning, $"Null entry. Skipping... {f + 1}/{fileCount}");
 
-                        atrributes[f].Year = br.ReadUInt16();
-                        atrributes[f].Month = br.ReadUInt16();
-                        atrributes[f].Day = br.ReadUInt16();
-                        atrributes[f].Hour = br.ReadUInt16();
-                        atrributes[f].Minute = br.ReadUInt16();
-                        atrributes[f].Second = br.ReadUInt16();
-                        atrributes[f].FileSize = br.ReadUInt32();
+                            fileNames[f] = string.Empty;
+                            fs1.Seek(0x30, SeekOrigin.Current);
 
-                        NotifyProgress?.Invoke(NotificationTypes.Info, $"Reading attributes table... {f + 1}/{fileCount}");
+                            continue;
+                        }
+                        else
+                        {
+                            byte[] name = new byte[32];
+                            fs1.Read(name, 0, name.Length);
+                            fileNames[f] = Encoding.Default.GetString(name).Replace("\0", "");
+
+                            atrributes[f].Year = br.ReadUInt16();
+                            atrributes[f].Month = br.ReadUInt16();
+                            atrributes[f].Day = br.ReadUInt16();
+                            atrributes[f].Hour = br.ReadUInt16();
+                            atrributes[f].Minute = br.ReadUInt16();
+                            atrributes[f].Second = br.ReadUInt16();
+                            atrributes[f].FileSize = br.ReadUInt32();
+
+                            NotifyProgress?.Invoke(NotificationTypes.Info, $"Reading attributes table... {f + 1}/{fileCount}");
+                        }
                     }
 
                     fileNames = CheckForDuplicatedFilenames(fileNames);
@@ -338,20 +342,17 @@ namespace AFSLib
                     }
                 }
 
+                metadata.FileNames = fileNames;
+
                 // Extract files
 
                 if (!Directory.Exists(outputDirectory)) Directory.CreateDirectory(outputDirectory);
 
-                string[] filelist = new string[fileCount];
-
                 for (int f = 0; f < fileCount; f++)
                 {
-                    if (toc[f].FileSize == 0 && toc[f].Offset == 0)
+                    if (toc[f].IsNullEntry)
                     {
-                        NotifyProgress?.Invoke(NotificationTypes.Warning, $"File \"{f}\" is a null file; Skipping.");
-
-                        filelist[f] = NULL_FILE;
-
+                        NotifyProgress?.Invoke(NotificationTypes.Warning, $"Null entry. Skipping... {f + 1}/{fileCount}");
                         continue;
                     }
 
@@ -382,15 +383,10 @@ namespace AFSLib
                             NotifyProgress?.Invoke(NotificationTypes.Warning, "Invalid date. Ignoring.");
                         }
                     }
-
-                    filelist[f] = fileNames[f];
                 }
-
-                metadata.FileNames = filelist;
             }
 
-            string meta = JsonSerializer.Serialize(metadata, new JsonSerializerOptions() { WriteIndented = true });
-            File.WriteAllText(outputDirectory + ".json", meta);
+            metadata.SaveToFile(outputDirectory + ".json");
 
             NotifyProgress?.Invoke(NotificationTypes.Success, $"\"{Path.GetFileName(inputFile)}\" has been extracted successfully.");
         }
@@ -401,6 +397,12 @@ namespace AFSLib
 
             for (int f = 0; f < fileNames.Length; f++)
             {
+                if (string.IsNullOrEmpty(fileNames[f]))
+                {
+                    output[f] = string.Empty;
+                    continue;
+                }
+
                 int count = 0;
 
                 for (int o = 0; o < f; o++)
@@ -436,6 +438,8 @@ namespace AFSLib
         {
             public uint Offset;
             public uint FileSize;
+
+            public bool IsNullEntry { get { return Offset == 0 && FileSize == 0; } }
         }
 
         struct FileAttributes
