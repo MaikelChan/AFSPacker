@@ -2,13 +2,14 @@
 using System.Globalization;
 using System.IO;
 using System.Text;
+using System.Text.Json;
 
 namespace AFSLib
 {
     public static class AFS
     {
-        const uint HEADER_MAGIC_1 = 0x00534641; // AFS
-        const uint HEADER_MAGIC_2 = 0x20534641;
+        const uint HEADER_MAGIC_00 = 0x00534641; // AFS
+        const uint HEADER_MAGIC_20 = 0x20534641;
         const string NULL_FILE = "#NULL#";
 
         public enum NotificationTypes { Info, Warning, Error, Success }
@@ -16,6 +17,11 @@ namespace AFSLib
         public delegate void NotifyProgressDelegate(NotificationTypes type, string message);
         public static event NotifyProgressDelegate NotifyProgress;
 
+        /// <summary>
+        /// Creates an AFS file out of the files inside a directory.
+        /// </summary>
+        /// <param name="inputDirectory">Directory containing the files that will go into the AFS file.</param>
+        /// <param name="outputFile">Path to the AFS file to create.</param>
         public static void CreateAFS(string inputDirectory, string outputFile)
         {
             if (string.IsNullOrEmpty(inputDirectory))
@@ -33,148 +39,167 @@ namespace AFSLib
                 throw new ArgumentNullException(nameof(outputFile));
             }
 
-            CreateAFS(inputDirectory, outputFile, null, true);
-        }
+            // Read metadata, or create a default one if it doesn't exist
 
-        public static void CreateAFS(string inputDirectory, string outputFile, string filesList, bool preserveFileNames)
-        {
-            if (filesList != null && !File.Exists(filesList))
+            string metadataFile = inputDirectory + ".json";
+            AFSMetadata metadata;
+
+            if (File.Exists(metadataFile))
             {
-                throw new FileNotFoundException("The following file has not been found: " + filesList);
-            }
-
-            NotifyProgress?.Invoke(NotificationTypes.Info, "Packaging files...");
-
-            string[] inputFiles;
-
-            if (string.IsNullOrEmpty(filesList))
-            {
-                inputFiles = Directory.GetFiles(inputDirectory);
+                string meta = File.ReadAllText(metadataFile);
+                metadata = JsonSerializer.Deserialize<AFSMetadata>(meta);
             }
             else
             {
-                inputFiles = File.ReadAllLines(filesList);
+                NotifyProgress?.Invoke(NotificationTypes.Warning, $"Metadata file has not been found: \"{metadataFile}\". Generated AFS file could be incompatible.");
+
+                string[] inputFiles = Directory.GetFiles(inputDirectory);
+                for (int f = 0; f < inputFiles.Length; f++)
+                {
+                    inputFiles[f] = Path.GetFileName(inputFiles[f]);
+                }
+
+                metadata = new AFSMetadata()
+                {
+                    FileNames = inputFiles
+                };
             }
 
-            using (FileStream fs1 = new FileStream(outputFile, FileMode.Create))
+            // Start creating the AFS file
+
+            NotifyProgress?.Invoke(NotificationTypes.Info, "Packaging files...");
+
+            using (FileStream fs1 = File.Create(outputFile))
             using (BinaryWriter bw = new BinaryWriter(fs1))
             {
-                bw.Write(HEADER_MAGIC_1);
-                bw.Write((uint)inputFiles.Length);
+                bw.Write(metadata.HeaderType == AFSMetadata.HeaderTypes.AFS_20 ? HEADER_MAGIC_20 : HEADER_MAGIC_00);
+                bw.Write((uint)metadata.FileCount);
 
                 // Generate TOC and FileNameDirectory
 
-                TableOfContents[] toc = new TableOfContents[inputFiles.Length];
-                FileAttributes[] attributes = new FileAttributes[inputFiles.Length];
+                TableOfContents[] toc = new TableOfContents[metadata.FileCount];
+                FileAttributes[] attributes = new FileAttributes[metadata.FileCount];
 
-                uint currentOffset = Utils.Pad((uint)(8 + (8 * inputFiles.Length) + 8), 0x800);  // Header + TOC + AttributeTable Offset and size
+                uint currentOffset = Utils.Pad((uint)(8 + (8 * metadata.FileCount) + 8), 0x800);  // Header + TOC + AttributeTable Offset and size
 
-                for (int n = 0; n < inputFiles.Length; n++)
+                for (int f = 0; f < metadata.FileCount; f++)
                 {
-                    if (inputFiles[n] == NULL_FILE)
+                    if (metadata.FileNames[f] == NULL_FILE)
                     {
-                        toc[n].FileSize = 0;
-                        toc[n].Offset = 0;
+                        toc[f].FileSize = 0;
+                        toc[f].Offset = 0;
 
-                        if (preserveFileNames)
+                        if (metadata.ContainsAttributes)
                         {
-                            //FileNameDirectory
-                            attributes[n].FileName = string.Empty;
-                            attributes[n].Year = 0;
-                            attributes[n].Month = 0;
-                            attributes[n].Day = 0;
-                            attributes[n].Hour = 0;
-                            attributes[n].Minute = 0;
-                            attributes[n].Second = 0;
-                            attributes[n].FileSize = 0;
+                            attributes[f].FileName = string.Empty;
+                            attributes[f].Year = 0;
+                            attributes[f].Month = 0;
+                            attributes[f].Day = 0;
+                            attributes[f].Hour = 0;
+                            attributes[f].Minute = 0;
+                            attributes[f].Second = 0;
+                            attributes[f].FileSize = 0;
                         }
                     }
                     else
                     {
-                        FileInfo f = new FileInfo(inputFiles[n]);
+                        string fileName = Path.Combine(inputDirectory, metadata.FileNames[f]);
+                        FileInfo fileInfo = new FileInfo(fileName);
 
-                        //TOC
-                        toc[n].FileSize = (uint)f.Length;
-                        toc[n].Offset = currentOffset;
+                        toc[f].FileSize = (uint)fileInfo.Length;
+                        toc[f].Offset = currentOffset;
 
-                        currentOffset += toc[n].FileSize;
+                        currentOffset += toc[f].FileSize;
                         currentOffset = Utils.Pad(currentOffset, 0x800);
 
-                        if (preserveFileNames)
+                        if (metadata.ContainsAttributes)
                         {
-                            //FileNameDirectory
-                            attributes[n].FileName = Path.GetFileName(inputFiles[n]);
-                            attributes[n].Year = (ushort)f.LastWriteTime.Year;
-                            attributes[n].Month = (ushort)f.LastWriteTime.Month;
-                            attributes[n].Day = (ushort)f.LastWriteTime.Day;
-                            attributes[n].Hour = (ushort)f.LastWriteTime.Hour;
-                            attributes[n].Minute = (ushort)f.LastWriteTime.Minute;
-                            attributes[n].Second = (ushort)f.LastWriteTime.Second;
-                            attributes[n].FileSize = (uint)f.Length;
+                            attributes[f].FileName = metadata.FileNames[f];
+                            attributes[f].Year = (ushort)fileInfo.LastWriteTime.Year;
+                            attributes[f].Month = (ushort)fileInfo.LastWriteTime.Month;
+                            attributes[f].Day = (ushort)fileInfo.LastWriteTime.Day;
+                            attributes[f].Hour = (ushort)fileInfo.LastWriteTime.Hour;
+                            attributes[f].Minute = (ushort)fileInfo.LastWriteTime.Minute;
+                            attributes[f].Second = (ushort)fileInfo.LastWriteTime.Second;
+                            attributes[f].FileSize = (uint)fileInfo.Length;
                         }
                     }
 
-                    if (preserveFileNames) NotifyProgress?.Invoke(NotificationTypes.Info, $"Processing TOC and attributes... {n}/{inputFiles.Length - 1}");
-                    else NotifyProgress?.Invoke(NotificationTypes.Info, $"Processing TOC... {n}/{inputFiles.Length - 1}");
+                    if (metadata.ContainsAttributes)
+                    {
+                        NotifyProgress?.Invoke(NotificationTypes.Info, $"Processing TOC and attributes... {f + 1}/{metadata.FileCount}");
+                    }
+                    else
+                    {
+                        NotifyProgress?.Invoke(NotificationTypes.Info, $"Processing TOC... {f + 1}/{metadata.FileCount}");
+                    }
                 }
 
-                //Write TOC to file
-                for (int n = 0; n < inputFiles.Length; n++)
-                {
-                    bw.Write(toc[n].Offset);
-                    bw.Write(toc[n].FileSize);
+                // Write TOC to file
 
-                    NotifyProgress?.Invoke(NotificationTypes.Info, $"Writing TOC... {n}/{inputFiles.Length - 1}");
+                for (int f = 0; f < metadata.FileCount; f++)
+                {
+                    bw.Write(toc[f].Offset);
+                    bw.Write(toc[f].FileSize);
+
+                    NotifyProgress?.Invoke(NotificationTypes.Info, $"Writing TOC... {f + 1}/{metadata.FileCount}");
                 }
 
                 uint attributeTableOffset = 0;
                 uint attributeTableSize = 0;
 
-                if (preserveFileNames)
+                if (metadata.ContainsAttributes)
                 {
-                    //Write Filename Directory Offset and Size
+                    // Write Filename Directory Offset and Size
+
                     attributeTableOffset = currentOffset;
-                    attributeTableSize = (uint)(inputFiles.Length * 0x30);
-                    fs1.Seek(toc[0].Offset - 8, SeekOrigin.Begin);
+                    attributeTableSize = (uint)(metadata.FileCount * 0x30);
+
+                    if (metadata.AttributesType == AFSMetadata.AttributesTypes.InfoAtBeginning)
+                        fs1.Seek(8 + (metadata.FileCount * 8), SeekOrigin.Begin);
+                    else if (metadata.AttributesType == AFSMetadata.AttributesTypes.InfoAtEnd)
+                        fs1.Seek(toc[0].Offset - 8, SeekOrigin.Begin);
+
                     bw.Write(attributeTableOffset);
                     bw.Write(attributeTableSize);
                 }
 
-                //Write files data to file
-                for (int n = 0; n < inputFiles.Length; n++)
-                {
-                    if (inputFiles[n] != NULL_FILE)
-                    {
-                        fs1.Seek(toc[n].Offset, SeekOrigin.Begin);
+                // Write files data to file
 
-                        using (FileStream fs = File.OpenRead(inputFiles[n]))
+                for (int f = 0; f < metadata.FileCount; f++)
+                {
+                    if (metadata.FileNames[f] != NULL_FILE)
+                    {
+                        fs1.Seek(toc[f].Offset, SeekOrigin.Begin);
+
+                        using (FileStream fs = File.OpenRead(Path.Combine(inputDirectory, metadata.FileNames[f])))
                         {
                             fs.CopyTo(fs1);
                         }
                     }
 
-                    NotifyProgress?.Invoke(NotificationTypes.Info, $"Writing files... {n}/{inputFiles.Length - 1}");
+                    NotifyProgress?.Invoke(NotificationTypes.Info, $"Writing files... {f + 1}/{metadata.FileCount}");
                 }
 
-                if (preserveFileNames)
+                if (metadata.ContainsAttributes)
                 {
                     //Write Filename Directory
                     fs1.Seek(attributeTableOffset, SeekOrigin.Begin);
-                    for (int n = 0; n < inputFiles.Length; n++)
+                    for (int f = 0; f < metadata.FileCount; f++)
                     {
-                        byte[] name = Encoding.Default.GetBytes(attributes[n].FileName);
+                        byte[] name = Encoding.Default.GetBytes(attributes[f].FileName);
                         fs1.Write(name, 0, name.Length);
                         fs1.Seek(0x20 - name.Length, SeekOrigin.Current);
 
-                        bw.Write(attributes[n].Year);
-                        bw.Write(attributes[n].Month);
-                        bw.Write(attributes[n].Day);
-                        bw.Write(attributes[n].Hour);
-                        bw.Write(attributes[n].Minute);
-                        bw.Write(attributes[n].Second);
-                        bw.Write(attributes[n].FileSize);
+                        bw.Write(attributes[f].Year);
+                        bw.Write(attributes[f].Month);
+                        bw.Write(attributes[f].Day);
+                        bw.Write(attributes[f].Hour);
+                        bw.Write(attributes[f].Minute);
+                        bw.Write(attributes[f].Second);
+                        bw.Write(attributes[f].FileSize);
 
-                        NotifyProgress?.Invoke(NotificationTypes.Info, $"Writing attributes... {n}/{inputFiles.Length - 1}");
+                        NotifyProgress?.Invoke(NotificationTypes.Info, $"Writing attributes... {f + 1}/{metadata.FileCount}");
                     }
                 }
 
@@ -187,6 +212,11 @@ namespace AFSLib
             NotifyProgress?.Invoke(NotificationTypes.Success, $"\"{Path.GetFileName(outputFile)}\" has been created successfully.");
         }
 
+        /// <summary>
+        /// Extracts the contents of an AFS into the specified directory.
+        /// </summary>
+        /// <param name="inputFile">Path to the AFS file to extract from.</param>
+        /// <param name="inputDirectory">Directory that will contain the extracted files.</param>
         public static void ExtractAFS(string inputFile, string outputDirectory)
         {
             if (string.IsNullOrEmpty(inputFile))
@@ -204,21 +234,22 @@ namespace AFSLib
                 throw new ArgumentNullException(nameof(outputDirectory));
             }
 
-            ExtractAFS(inputFile, outputDirectory, null);
-        }
+            AFSMetadata metadata = new AFSMetadata();
 
-        public static void ExtractAFS(string inputFile, string outputDirectory, string filesList)
-        {
-            if (filesList != null && !File.Exists(filesList))
-            {
-                throw new FileNotFoundException("The following file has not been found: " + filesList);
-            }
-
-            using (FileStream fs1 = new FileStream(inputFile, FileMode.Open, FileAccess.Read))
+            using (FileStream fs1 = File.OpenRead(inputFile))
             using (BinaryReader br = new BinaryReader(fs1))
             {
                 uint magic = br.ReadUInt32();
-                if (magic != HEADER_MAGIC_1 && magic != HEADER_MAGIC_2) //If Magic is different than AFS
+
+                if (magic == HEADER_MAGIC_00)
+                {
+                    metadata.HeaderType = AFSMetadata.HeaderTypes.AFS_00;
+                }
+                else if (magic == HEADER_MAGIC_20)
+                {
+                    metadata.HeaderType = AFSMetadata.HeaderTypes.AFS_20;
+                }
+                else
                 {
                     NotifyProgress?.Invoke(NotificationTypes.Error, "Input file doesn't seem to be a valid AFS file.");
                     return;
@@ -226,108 +257,109 @@ namespace AFSLib
 
                 NotifyProgress?.Invoke(NotificationTypes.Info, "Extracting files...");
 
-                uint numberOfFiles = br.ReadUInt32();
+                uint fileCount = br.ReadUInt32();
 
-                TableOfContents[] toc = new TableOfContents[numberOfFiles];
-                FileAttributes[] atrributes = new FileAttributes[numberOfFiles];
+                TableOfContents[] toc = new TableOfContents[fileCount];
+                FileAttributes[] atrributes = new FileAttributes[fileCount];
 
-                //Read TOC
-                for (int n = 0; n < numberOfFiles; n++)
+                // Read TOC
+
+                for (int f = 0; f < fileCount; f++)
                 {
-                    toc[n].Offset = br.ReadUInt32();
-                    toc[n].FileSize = br.ReadUInt32();
+                    toc[f].Offset = br.ReadUInt32();
+                    toc[f].FileSize = br.ReadUInt32();
 
-                    NotifyProgress?.Invoke(NotificationTypes.Info, $"Reading TOC... {n}/{numberOfFiles - 1}");
+                    NotifyProgress?.Invoke(NotificationTypes.Info, $"Reading TOC... {f + 1}/{fileCount}");
                 }
 
-                //Read Filename Directory Offset and Size
-                bool areThereAttributes = false;
-                uint attributeTableOffset = 0;
-                uint attributeTableSize = 0;
+                // Read Attributes Table Offset and Size
 
-                while (fs1.Position < toc[0].Offset - 4)
+                metadata.AttributesType = AFSMetadata.AttributesTypes.NoAttributes;
+
+                uint lastFileEndOffset = toc[fileCount - 1].Offset + toc[fileCount - 1].FileSize;
+                uint attributeTableOffset = br.ReadUInt32();
+                uint attributeTableSize = br.ReadUInt32();
+
+                bool isAttributeInfoValid = IsAttributeInfoValid(attributeTableOffset, attributeTableSize, (uint)fs1.Length, fileCount, lastFileEndOffset);
+
+                if (isAttributeInfoValid)
                 {
-                    uint offset = br.ReadUInt32();
-                    uint size = br.ReadUInt32();
+                    metadata.AttributesType = AFSMetadata.AttributesTypes.InfoAtBeginning;
+                }
+                else
+                {
+                    fs1.Position = toc[0].Offset - 8;
+                    attributeTableOffset = br.ReadUInt32();
+                    attributeTableSize = br.ReadUInt32();
 
-                    // If zeroes are found, keep searching for attribute data.
-                    // Sometimes it's at the begenning of the block and sometimes at the end.
-                    if (offset == 0) continue;
-                    if (size == 0) continue;
+                    isAttributeInfoValid = IsAttributeInfoValid(attributeTableOffset, attributeTableSize, (uint)fs1.Length, fileCount, lastFileEndOffset);
 
-                    // Check if this data makes sense, as there are times where random data can be found
-                    // instead of attribute offset and size. If not, let's assume there's no attribute data.
-                    uint lastFileEndOffset = toc[numberOfFiles - 1].Offset + toc[numberOfFiles - 1].FileSize;
-                    if (size > fs1.Length - lastFileEndOffset) break;
-                    if (size < numberOfFiles * 0x30) break;
-                    if (offset < lastFileEndOffset) break;
-                    if (offset > fs1.Length - size) break;
-
-                    // If the above conditions are not met, it looks like it's valid attribute data
-                    areThereAttributes = true;
-                    attributeTableOffset = offset;
-                    attributeTableSize = size;
-                    break;
+                    if (isAttributeInfoValid)
+                    {
+                        metadata.AttributesType = AFSMetadata.AttributesTypes.InfoAtEnd;
+                    }
                 }
 
-                if (areThereAttributes) NotifyProgress?.Invoke(NotificationTypes.Info, $"Attributes table found at 0x{attributeTableOffset:X8}.");
+                if (metadata.ContainsAttributes) NotifyProgress?.Invoke(NotificationTypes.Info, $"Attributes table found at 0x{attributeTableOffset:X8}.");
                 else NotifyProgress?.Invoke(NotificationTypes.Info, "Attributes table not found.");
 
-                string[] fileNames = new string[numberOfFiles];
+                string[] fileNames = new string[fileCount];
 
-                if (areThereAttributes)
+                if (metadata.ContainsAttributes)
                 {
-                    //Read Attribute table
+                    // Read Attribute table
+
                     fs1.Seek(attributeTableOffset, SeekOrigin.Begin);
 
-                    for (int n = 0; n < numberOfFiles; n++)
+                    for (int f = 0; f < fileCount; f++)
                     {
                         byte[] name = new byte[32];
                         fs1.Read(name, 0, name.Length);
-                        fileNames[n] = Encoding.Default.GetString(name).Replace("\0", "");
+                        fileNames[f] = Encoding.Default.GetString(name).Replace("\0", "");
 
-                        atrributes[n].Year = br.ReadUInt16();
-                        atrributes[n].Month = br.ReadUInt16();
-                        atrributes[n].Day = br.ReadUInt16();
-                        atrributes[n].Hour = br.ReadUInt16();
-                        atrributes[n].Minute = br.ReadUInt16();
-                        atrributes[n].Second = br.ReadUInt16();
-                        atrributes[n].FileSize = br.ReadUInt32();
+                        atrributes[f].Year = br.ReadUInt16();
+                        atrributes[f].Month = br.ReadUInt16();
+                        atrributes[f].Day = br.ReadUInt16();
+                        atrributes[f].Hour = br.ReadUInt16();
+                        atrributes[f].Minute = br.ReadUInt16();
+                        atrributes[f].Second = br.ReadUInt16();
+                        atrributes[f].FileSize = br.ReadUInt32();
 
-                        NotifyProgress?.Invoke(NotificationTypes.Info, $"Reading attributes table... {n}/{numberOfFiles - 1}");
+                        NotifyProgress?.Invoke(NotificationTypes.Info, $"Reading attributes table... {f + 1}/{fileCount}");
                     }
 
                     fileNames = CheckForDuplicatedFilenames(fileNames);
                 }
                 else
                 {
-                    for (int n = 0; n < numberOfFiles; n++)
+                    for (int f = 0; f < fileCount; f++)
                     {
-                        fileNames[n] = n.ToString("00000000", CultureInfo.InvariantCulture);
+                        fileNames[f] = f.ToString("00000000", CultureInfo.InvariantCulture);
                     }
                 }
 
-                //Extract files
+                // Extract files
+
                 if (!Directory.Exists(outputDirectory)) Directory.CreateDirectory(outputDirectory);
 
-                string[] filelist = new string[numberOfFiles];
+                string[] filelist = new string[fileCount];
 
-                for (int n = 0; n < numberOfFiles; n++)
+                for (int f = 0; f < fileCount; f++)
                 {
-                    if (toc[n].FileSize == 0 && toc[n].Offset == 0)
+                    if (toc[f].FileSize == 0 && toc[f].Offset == 0)
                     {
-                        NotifyProgress?.Invoke(NotificationTypes.Warning, $"File \"{n}\" is a null file; Skipping.");
+                        NotifyProgress?.Invoke(NotificationTypes.Warning, $"File \"{f}\" is a null file; Skipping.");
 
-                        filelist[n] = NULL_FILE;
+                        filelist[f] = NULL_FILE;
 
                         continue;
                     }
 
-                    NotifyProgress?.Invoke(NotificationTypes.Info, $"Reading files... {n}/{numberOfFiles - 1}");
+                    NotifyProgress?.Invoke(NotificationTypes.Info, $"Reading files... {f + 1}/{fileCount}");
 
-                    fs1.Seek(toc[n].Offset, SeekOrigin.Begin);
+                    fs1.Seek(toc[f].Offset, SeekOrigin.Begin);
 
-                    string outputFile = Path.Combine(outputDirectory, fileNames[n]);
+                    string outputFile = Path.Combine(outputDirectory, fileNames[f]);
                     if (File.Exists(outputFile))
                     {
                         NotifyProgress?.Invoke(NotificationTypes.Warning, $"File \"{outputFile}\" already exists. Overwriting.");
@@ -335,14 +367,14 @@ namespace AFSLib
 
                     using (FileStream fs = File.OpenWrite(outputFile))
                     {
-                        fs1.CopySliceTo(fs, (int)toc[n].FileSize);
+                        fs1.CopySliceTo(fs, (int)toc[f].FileSize);
                     }
 
-                    if (areThereAttributes)
+                    if (metadata.ContainsAttributes)
                     {
                         try
                         {
-                            DateTime date = new DateTime(atrributes[n].Year, atrributes[n].Month, atrributes[n].Day, atrributes[n].Hour, atrributes[n].Minute, atrributes[n].Second);
+                            DateTime date = new DateTime(atrributes[f].Year, atrributes[f].Month, atrributes[f].Day, atrributes[f].Hour, atrributes[f].Minute, atrributes[f].Second);
                             File.SetLastWriteTime(outputFile, date);
                         }
                         catch (ArgumentOutOfRangeException)
@@ -351,42 +383,62 @@ namespace AFSLib
                         }
                     }
 
-                    filelist[n] = outputFile; //Save the list of files in order to have the original order
+                    filelist[f] = fileNames[f];
                 }
 
-                if (!string.IsNullOrEmpty(filesList)) File.WriteAllLines(filesList, filelist);
-
-                NotifyProgress?.Invoke(NotificationTypes.Success, $"\"{Path.GetFileName(inputFile)}\" has been extracted successfully.");
+                metadata.FileNames = filelist;
             }
+
+            string meta = JsonSerializer.Serialize(metadata, new JsonSerializerOptions() { WriteIndented = true });
+            File.WriteAllText(outputDirectory + ".json", meta);
+
+            NotifyProgress?.Invoke(NotificationTypes.Success, $"\"{Path.GetFileName(inputFile)}\" has been extracted successfully.");
         }
 
         static string[] CheckForDuplicatedFilenames(string[] fileNames)
         {
             string[] output = new string[fileNames.Length];
 
-            for (int n = 0; n < fileNames.Length; n++)
+            for (int f = 0; f < fileNames.Length; f++)
             {
                 int count = 0;
 
-                for (int o = 0; o < n; o++)
+                for (int o = 0; o < f; o++)
                 {
-                    if (fileNames[n] == fileNames[o]) count++;
+                    if (fileNames[f] == fileNames[o]) count++;
                 }
 
-                if (count == 0) output[n] = fileNames[n];
-                else output[n] = $"{Path.GetFileNameWithoutExtension(fileNames[n])} ({count}){Path.GetExtension(fileNames[n])}";
+                if (count == 0) output[f] = fileNames[f];
+                else output[f] = $"{Path.GetFileNameWithoutExtension(fileNames[f])} ({count}){Path.GetExtension(fileNames[f])}";
             }
 
             return output;
         }
 
-        public struct TableOfContents
+        static bool IsAttributeInfoValid(uint attributesOffset, uint attributesSize, uint afsFileSize, uint fileCount, uint lastFileEndOffset)
+        {
+            // If zeroes are found, info is not valid.
+            if (attributesOffset == 0) return false;
+            if (attributesSize == 0) return false;
+
+            // Check if this info makes sense, as there are times where random
+            // data can be found instead of attribute offset and size.
+            if (attributesSize > afsFileSize - lastFileEndOffset) return false;
+            if (attributesSize < fileCount * 0x30) return false;
+            if (attributesOffset < lastFileEndOffset) return false;
+            if (attributesOffset > afsFileSize - attributesSize) return false;
+
+            // If the above conditions are not met, it looks like it's valid attribute data
+            return true;
+        }
+
+        struct TableOfContents
         {
             public uint Offset;
             public uint FileSize;
         }
 
-        public struct FileAttributes
+        struct FileAttributes
         {
             public string FileName;
             public ushort Year;

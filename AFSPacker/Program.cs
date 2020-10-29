@@ -10,7 +10,7 @@ namespace AFSPacker
         {
             ShowHeader();
 
-            if (args.Length < 3 || args.Length > 5 || (args[0] != "-c" && args[0] != "-e"))
+            if (args.Length != 3)
             {
                 ShowUsage();
                 return;
@@ -22,29 +22,11 @@ namespace AFSPacker
             {
                 if (args[0] == "-c")
                 {
-                    if (args.Length == 3)
-                    {
-                        AFS.CreateAFS(args[1], args[2]);
-                    }
-                    else
-                    {
-                        bool preserveFileNames = true;
-                        string listfile = null;
-
-                        for (int n = 3; n < args.Length; n++)
-                        {
-                            if (args[n] == "-nf" && preserveFileNames == true) preserveFileNames = false;
-                            else if (args[n] != "-nf" && listfile == null) listfile = args[n];
-                            else { ShowUsage(); return; }
-                        }
-
-                        AFS.CreateAFS(args[1], args[2], listfile, preserveFileNames);
-                    }
+                    AFS.CreateAFS(args[1], args[2]);
                 }
                 else if (args[0] == "-e")
                 {
-                    if (args.Length == 3) AFS.ExtractAFS(args[1], args[2]);
-                    else AFS.ExtractAFS(args[1], args[2], args[3]);
+                    AFS.ExtractAFS(args[1], args[2]);
                 }
             }
             catch (Exception e)
@@ -63,6 +45,7 @@ namespace AFSPacker
             switch (type)
             {
                 default:
+                case AFS.NotificationTypes.Info:
                     Console.ForegroundColor = ConsoleColor.White;
                     break;
                 case AFS.NotificationTypes.Warning:
@@ -105,24 +88,8 @@ namespace AFSPacker
 
             Console.ForegroundColor = ConsoleColor.White;
 
-            Console.WriteLine("  AFSPacker -e <input_file> <output_dir> [list_file]        :  Extract AFS archive");
-            Console.WriteLine("  AFSPacker -c <input_dir> <output_file> [list_file] [-nf]  :  Create AFS archive\n");
-
-            Console.ForegroundColor = ConsoleColor.Gray;
-
-            Console.WriteLine("    list_file: will create or read a text file containing a list of all the");
-            Console.WriteLine("               files that will be extracted/imported from/to the AFS archive.");
-            Console.WriteLine("               This is useful if you need the files to be in the same");
-            Console.WriteLine("               order as in the original AFS (required for Shenmue 1 & 2).\n");
-
-            Console.WriteLine("          -nf: will create the AFS archive with no filenames. This is useful for");
-            Console.WriteLine("               some games like Resident Evil: Code Veronica, that have AFS");
-            Console.WriteLine("               archives with files that don't preserve their file names,");
-            Console.WriteLine("               creation dates, etc.\n\n");
-
-#if DEBUG
-            Console.ReadLine();
-#endif
+            Console.WriteLine("  AFSPacker -e <input_afs_file> <output_dir>  :  Extract AFS archive");
+            Console.WriteLine("  AFSPacker -c <input_dir> <output_afs_file>  :  Create AFS archive\n");
         }
     }
 }
