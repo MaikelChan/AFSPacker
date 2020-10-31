@@ -225,7 +225,8 @@ namespace AFSLib
 
                 uint[] offsets = new uint[EntryCount];
 
-                uint currentEntryOffset = Utils.Pad(HEADER_SIZE + (ENTRY_INFO_ELEMENT_SIZE * EntryCount) + ATTRIBUTE_INFO_SIZE, PADDING_SIZE);
+                uint firstEntryOffset = Utils.Pad(HEADER_SIZE + (ENTRY_INFO_ELEMENT_SIZE * EntryCount) + ATTRIBUTE_INFO_SIZE, PADDING_SIZE);
+                uint currentEntryOffset = firstEntryOffset;
 
                 for (int e = 0; e < EntryCount; e++)
                 {
@@ -263,7 +264,7 @@ namespace AFSLib
                 // Write attributes info if available
 
                 outputStream.Position = HEADER_SIZE + (EntryCount * ENTRY_INFO_ELEMENT_SIZE);
-                Utils.FillStreamWithZeroes(outputStream, offsets[0] - (uint)outputStream.Position);
+                Utils.FillStreamWithZeroes(outputStream, firstEntryOffset - (uint)outputStream.Position);
 
                 uint attributesInfoOffset = currentEntryOffset;
 
@@ -272,7 +273,7 @@ namespace AFSLib
                     if (AttributesInfoType == AttributesInfoType.InfoAtBeginning)
                         outputStream.Position = HEADER_SIZE + (EntryCount * ENTRY_INFO_ELEMENT_SIZE);
                     else if (AttributesInfoType == AttributesInfoType.InfoAtEnd)
-                        outputStream.Position = offsets[0] - ATTRIBUTE_INFO_SIZE;
+                        outputStream.Position = firstEntryOffset - ATTRIBUTE_INFO_SIZE;
 
                     bw.Write(attributesInfoOffset);
                     bw.Write(EntryCount * ATTRIBUTE_ELEMENT_SIZE);

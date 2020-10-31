@@ -8,4 +8,5 @@ The program requires the [.NET Core Runtime 3.1](https://dotnet.microsoft.com/do
 ```
 AFSPacker -e <input_afs_file> <output_dir>  :  Extract AFS archive
 AFSPacker -c <input_dir> <output_afs_file>  :  Create AFS archive
+AFSPacker -i <input_afs_file>               :  Show AFS information
 ```
