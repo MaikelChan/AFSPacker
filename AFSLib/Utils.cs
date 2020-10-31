@@ -1,17 +1,24 @@
 ﻿using System;
 using System.IO;
+using System.Text;
 
 namespace AFSLib
 {
-    static class Utils
+    internal static class Utils
     {
-        public static uint Pad(uint value, uint padBytes)
+        internal static uint Pad(uint value, uint padBytes)
         {
             if ((value % padBytes) != 0) return value + (padBytes - (value % padBytes));
             else return value;
         }
 
-        public static void CopySliceTo(this Stream origin, Stream destination, int bytesCount)
+        internal static void FillStreamWithZeroes(Stream stream, uint length)
+        {
+            byte[] padding = new byte[length];
+            stream.Write(padding, 0, (int)length);
+        }
+
+        internal static void CopySliceTo(this Stream origin, Stream destination, int bytesCount)
         {
             byte[] buffer = new byte[65536];
             int count;
@@ -21,6 +28,11 @@ namespace AFSLib
                 destination.Write(buffer, 0, count);
                 bytesCount -= count;
             }
+        }
+
+        internal static string GetStringFromBytes(byte[] bytes)
+        {
+            return Encoding.Default.GetString(bytes).Replace("\0", "");
         }
     }
 }

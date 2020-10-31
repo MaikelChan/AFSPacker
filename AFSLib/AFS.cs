@@ -1,423 +1,479 @@
 ﻿using System;
-using System.Globalization;
+using System.Collections.Generic;
+using System.Collections.ObjectModel;
 using System.IO;
 using System.Text;
 
 namespace AFSLib
 {
-    public static class AFS
+    public class AFS
     {
-        const uint HEADER_MAGIC_00 = 0x00534641; // AFS
-        const uint HEADER_MAGIC_20 = 0x20534641;
-
-        public enum NotificationTypes { Info, Warning, Error, Success }
-
-        public delegate void NotifyProgressDelegate(NotificationTypes type, string message);
-        public static event NotifyProgressDelegate NotifyProgress;
+        /// <summary>
+        /// Each of the entries in the AFS object.
+        /// </summary>
+        public ReadOnlyCollection<Entry> Entries => readonlyEntries;
 
         /// <summary>
-        /// Creates an AFS file out of the files inside a directory.
+        /// The header magic that the AFS file will have.
         /// </summary>
-        /// <param name="inputDirectory">Directory containing the files that will go into the AFS file.</param>
-        /// <param name="outputFile">Path to the AFS file to create.</param>
-        public static void CreateAFS(string inputDirectory, string outputFile)
+        public HeaderMagicType HeaderMagicType { get; set; }
+
+        /// <summary>
+        /// The location where the attributes info will be stored. Or if the file won't contain any attributes.
+        /// </summary>
+        public AttributesInfoType AttributesInfoType { get; set; }
+
+        /// <summary>
+        /// The amount of entries in this AFS object.
+        /// </summary>
+        public uint EntryCount => (uint)entries.Count;
+
+        /// <summary>
+        /// If the AFS object contains attributes or not. It will be false if AttributesInfoType == AttributesInfoType.NoAttributes.
+        /// </summary>
+        public bool ContainsAttributes => AttributesInfoType != AttributesInfoType.NoAttributes;
+
+        /// <summary>
+        /// Event that will be called each time some process wants to report something.
+        /// </summary>
+        public event NotifyProgressDelegate NotifyProgress;
+        public delegate void NotifyProgressDelegate(NotificationType type, string message);
+
+        internal readonly List<Entry> entries;
+        internal readonly Dictionary<string, uint> duplicates;
+
+        internal const uint HEADER_MAGIC_00 = 0x00534641; // AFS
+        internal const uint HEADER_MAGIC_20 = 0x20534641;
+        internal const uint HEADER_SIZE = 0x8;
+        internal const uint ENTRY_INFO_ELEMENT_SIZE = 0x8;
+        internal const uint ATTRIBUTE_INFO_SIZE = 0x8;
+        internal const uint ATTRIBUTE_ELEMENT_SIZE = 0x30;
+        internal const uint MAX_ENTRY_NAME_LENGTH = 0x20;
+        internal const uint PADDING_SIZE = 0x800;
+
+        private readonly Stream afsStream;
+        private readonly ReadOnlyCollection<Entry> readonlyEntries;
+
+        /// <summary>
+        /// Create an empty AFS object.
+        /// </summary>
+        public AFS()
         {
-            if (string.IsNullOrEmpty(inputDirectory))
-            {
-                throw new ArgumentNullException(nameof(inputDirectory));
-            }
-
-            if (!Directory.Exists(inputDirectory))
-            {
-                throw new DirectoryNotFoundException("The following directory has not been found: " + inputDirectory);
-            }
-
-            if (string.IsNullOrEmpty(outputFile))
-            {
-                throw new ArgumentNullException(nameof(outputFile));
-            }
-
-            // Read metadata, or create a default one if it doesn't exist
-
-            string metadataFile = inputDirectory + ".json";
-            AFSMetadata metadata;
-
-            if (File.Exists(metadataFile))
-            {
-                metadata = AFSMetadata.LoadFromFile(metadataFile);
-            }
-            else
-            {
-                NotifyProgress?.Invoke(NotificationTypes.Warning, $"Metadata file has not been found: \"{metadataFile}\". Creating an AFS file with default settings.");
-
-                metadata = new AFSMetadata(inputDirectory);
-            }
-
-            // Start creating the AFS file
-
-            NotifyProgress?.Invoke(NotificationTypes.Info, "Packaging files...");
-
-            using (FileStream fs1 = File.Create(outputFile))
-            using (BinaryWriter bw = new BinaryWriter(fs1))
-            {
-                bw.Write(metadata.HeaderType == AFSMetadata.HeaderTypes.AFS_20 ? HEADER_MAGIC_20 : HEADER_MAGIC_00);
-                bw.Write((uint)metadata.FileCount);
-
-                // Generate TOC and FileNameDirectory
-
-                TableOfContents[] toc = new TableOfContents[metadata.FileCount];
-                FileAttributes[] attributes = new FileAttributes[metadata.FileCount];
-
-                uint currentOffset = Utils.Pad((uint)(8 + (8 * metadata.FileCount) + 8), 0x800);  // Header + TOC + AttributeTable Offset and size
-
-                for (int f = 0; f < metadata.FileCount; f++)
-                {
-                    if (metadata.FileNames[f] == string.Empty)
-                    {
-                        toc[f].FileSize = 0;
-                        toc[f].Offset = 0;
-
-                        if (metadata.ContainsAttributes)
-                        {
-                            attributes[f].FileName = string.Empty;
-                            attributes[f].Year = 0;
-                            attributes[f].Month = 0;
-                            attributes[f].Day = 0;
-                            attributes[f].Hour = 0;
-                            attributes[f].Minute = 0;
-                            attributes[f].Second = 0;
-                            attributes[f].FileSize = 0;
-                        }
-                    }
-                    else
-                    {
-                        string fileName = Path.Combine(inputDirectory, metadata.FileNames[f]);
-                        FileInfo fileInfo = new FileInfo(fileName);
-
-                        toc[f].FileSize = (uint)fileInfo.Length;
-                        toc[f].Offset = currentOffset;
-
-                        currentOffset += toc[f].FileSize;
-                        currentOffset = Utils.Pad(currentOffset, 0x800);
-
-                        if (metadata.ContainsAttributes)
-                        {
-                            attributes[f].FileName = metadata.FileNames[f];
-                            attributes[f].Year = (ushort)fileInfo.LastWriteTime.Year;
-                            attributes[f].Month = (ushort)fileInfo.LastWriteTime.Month;
-                            attributes[f].Day = (ushort)fileInfo.LastWriteTime.Day;
-                            attributes[f].Hour = (ushort)fileInfo.LastWriteTime.Hour;
-                            attributes[f].Minute = (ushort)fileInfo.LastWriteTime.Minute;
-                            attributes[f].Second = (ushort)fileInfo.LastWriteTime.Second;
-                            attributes[f].FileSize = (uint)fileInfo.Length;
-                        }
-                    }
-
-                    if (metadata.ContainsAttributes)
-                    {
-                        NotifyProgress?.Invoke(NotificationTypes.Info, $"Processing TOC and attributes... {f + 1}/{metadata.FileCount}");
-                    }
-                    else
-                    {
-                        NotifyProgress?.Invoke(NotificationTypes.Info, $"Processing TOC... {f + 1}/{metadata.FileCount}");
-                    }
-                }
-
-                // Write TOC to file
-
-                for (int f = 0; f < metadata.FileCount; f++)
-                {
-                    bw.Write(toc[f].Offset);
-                    bw.Write(toc[f].FileSize);
-
-                    NotifyProgress?.Invoke(NotificationTypes.Info, $"Writing TOC... {f + 1}/{metadata.FileCount}");
-                }
-
-                uint attributeTableOffset = 0;
-                uint attributeTableSize = 0;
-
-                if (metadata.ContainsAttributes)
-                {
-                    // Write Filename Directory Offset and Size
-
-                    attributeTableOffset = currentOffset;
-                    attributeTableSize = (uint)(metadata.FileCount * 0x30);
-
-                    if (metadata.AttributesType == AFSMetadata.AttributesTypes.InfoAtBeginning)
-                        fs1.Seek(8 + (metadata.FileCount * 8), SeekOrigin.Begin);
-                    else if (metadata.AttributesType == AFSMetadata.AttributesTypes.InfoAtEnd)
-                        fs1.Seek(toc[0].Offset - 8, SeekOrigin.Begin);
-
-                    bw.Write(attributeTableOffset);
-                    bw.Write(attributeTableSize);
-                }
-
-                // Write files data to file
-
-                for (int f = 0; f < metadata.FileCount; f++)
-                {
-                    if (metadata.FileNames[f] != string.Empty)
-                    {
-                        fs1.Seek(toc[f].Offset, SeekOrigin.Begin);
-
-                        using (FileStream fs = File.OpenRead(Path.Combine(inputDirectory, metadata.FileNames[f])))
-                        {
-                            fs.CopyTo(fs1);
-                        }
-
-                        NotifyProgress?.Invoke(NotificationTypes.Info, $"Writing files... {f + 1}/{metadata.FileCount}");
-                    }
-                    else
-                    {
-                        NotifyProgress?.Invoke(NotificationTypes.Info, $"Null file... {f + 1}/{metadata.FileCount}");
-                    }
-                }
-
-                if (metadata.ContainsAttributes)
-                {
-                    //Write Filename Directory
-                    fs1.Seek(attributeTableOffset, SeekOrigin.Begin);
-                    for (int f = 0; f < metadata.FileCount; f++)
-                    {
-                        byte[] name = Encoding.Default.GetBytes(attributes[f].FileName);
-                        fs1.Write(name, 0, name.Length);
-                        fs1.Seek(0x20 - name.Length, SeekOrigin.Current);
-
-                        bw.Write(attributes[f].Year);
-                        bw.Write(attributes[f].Month);
-                        bw.Write(attributes[f].Day);
-                        bw.Write(attributes[f].Hour);
-                        bw.Write(attributes[f].Minute);
-                        bw.Write(attributes[f].Second);
-                        bw.Write(attributes[f].FileSize);
-
-                        NotifyProgress?.Invoke(NotificationTypes.Info, $"Writing attributes... {f + 1}/{metadata.FileCount}");
-                    }
-                }
-
-                //Pad final 0s
-                long currentPosition = fs1.Position;
-                long eof = Utils.Pad((uint)fs1.Position, 0x800);
-                for (long n = currentPosition; n < eof; n++) bw.Write((byte)0);
-            }
-
-            NotifyProgress?.Invoke(NotificationTypes.Success, $"\"{Path.GetFileName(outputFile)}\" has been created successfully.");
+            entries = new List<Entry>();
+            readonlyEntries = entries.AsReadOnly();
+            duplicates = new Dictionary<string, uint>();
+            HeaderMagicType = HeaderMagicType.AFS_00;
+            AttributesInfoType = AttributesInfoType.InfoAtBeginning;
         }
 
         /// <summary>
-        /// Extracts the contents of an AFS into the specified directory.
+        /// Create an AFS object out of an AFS stream.
         /// </summary>
-        /// <param name="inputFile">Path to the AFS file to extract from.</param>
-        /// <param name="inputDirectory">Directory that will contain the extracted files.</param>
-        public static void ExtractAFS(string inputFile, string outputDirectory)
+        /// <param name="afsStream">Stream containing the AFS file data.</param>
+        public AFS(Stream afsStream) : this()
         {
-            if (string.IsNullOrEmpty(inputFile))
+            if (afsStream == null)
             {
-                throw new ArgumentNullException(nameof(inputFile));
+                throw new ArgumentNullException(nameof(afsStream));
             }
 
-            if (!File.Exists(inputFile))
-            {
-                throw new FileNotFoundException("The following file has not been found: " + inputFile);
-            }
+            this.afsStream = afsStream;
 
-            if (string.IsNullOrEmpty(outputDirectory))
+            using (BinaryReader br = new BinaryReader(afsStream, Encoding.UTF8, true))
             {
-                throw new ArgumentNullException(nameof(outputDirectory));
-            }
+                // Check if the Magic is valid
 
-            AFSMetadata metadata = new AFSMetadata();
-
-            using (FileStream fs1 = File.OpenRead(inputFile))
-            using (BinaryReader br = new BinaryReader(fs1))
-            {
                 uint magic = br.ReadUInt32();
 
                 if (magic == HEADER_MAGIC_00)
                 {
-                    metadata.HeaderType = AFSMetadata.HeaderTypes.AFS_00;
+                    HeaderMagicType = HeaderMagicType.AFS_00;
                 }
                 else if (magic == HEADER_MAGIC_20)
                 {
-                    metadata.HeaderType = AFSMetadata.HeaderTypes.AFS_20;
+                    HeaderMagicType = HeaderMagicType.AFS_20;
                 }
                 else
                 {
-                    NotifyProgress?.Invoke(NotificationTypes.Error, "Input file doesn't seem to be a valid AFS file.");
-                    return;
+                    throw new InvalidDataException("Stream doesn't seem to contain valid AFS data.");
                 }
 
-                NotifyProgress?.Invoke(NotificationTypes.Info, "Extracting files...");
+                // Start gathering info about entries and attributes
 
-                uint fileCount = br.ReadUInt32();
+                uint entryCount = br.ReadUInt32();
+                StreamEntryInfo[] entriesInfo = new StreamEntryInfo[entryCount];
 
-                TableOfContents[] toc = new TableOfContents[fileCount];
-                FileAttributes[] atrributes = new FileAttributes[fileCount];
+                uint dataBlockStartOffset = 0;
+                uint dataBlockEndOffset = 0;
 
-                // Read TOC
-
-                for (int f = 0; f < fileCount; f++)
+                for (int e = 0; e < entryCount; e++)
                 {
-                    toc[f].Offset = br.ReadUInt32();
-                    toc[f].FileSize = br.ReadUInt32();
+                    entriesInfo[e].Offset = br.ReadUInt32();
+                    entriesInfo[e].Size = br.ReadUInt32();
 
-                    NotifyProgress?.Invoke(NotificationTypes.Info, $"Reading TOC... {f + 1}/{fileCount}");
+                    if (entriesInfo[e].IsNull)
+                    {
+                        continue;
+                    }
+
+                    if (dataBlockStartOffset == 0) dataBlockStartOffset = entriesInfo[e].Offset;
+                    dataBlockEndOffset = entriesInfo[e].Offset + entriesInfo[e].Size;
                 }
 
-                // Read Attributes Table Offset and Size
+                // Find where attribute info is located
 
-                metadata.AttributesType = AFSMetadata.AttributesTypes.NoAttributes;
+                AttributesInfoType = AttributesInfoType.NoAttributes;
 
-                uint lastFileEndOffset = toc[fileCount - 1].Offset + toc[fileCount - 1].FileSize;
-                uint attributeTableOffset = br.ReadUInt32();
-                uint attributeTableSize = br.ReadUInt32();
+                uint attributeDataOffset = br.ReadUInt32();
+                uint attributeDataSize = br.ReadUInt32();
 
-                bool isAttributeInfoValid = IsAttributeInfoValid(attributeTableOffset, attributeTableSize, (uint)fs1.Length, fileCount, lastFileEndOffset);
+                bool isAttributeInfoValid = IsAttributeInfoValid(attributeDataOffset, attributeDataSize, (uint)afsStream.Length, dataBlockEndOffset);
 
                 if (isAttributeInfoValid)
                 {
-                    metadata.AttributesType = AFSMetadata.AttributesTypes.InfoAtBeginning;
+                    AttributesInfoType = AttributesInfoType.InfoAtBeginning;
                 }
                 else
                 {
-                    fs1.Position = toc[0].Offset - 8;
-                    attributeTableOffset = br.ReadUInt32();
-                    attributeTableSize = br.ReadUInt32();
+                    afsStream.Position = dataBlockStartOffset - ATTRIBUTE_INFO_SIZE;
+                    attributeDataOffset = br.ReadUInt32();
+                    attributeDataSize = br.ReadUInt32();
 
-                    isAttributeInfoValid = IsAttributeInfoValid(attributeTableOffset, attributeTableSize, (uint)fs1.Length, fileCount, lastFileEndOffset);
+                    isAttributeInfoValid = IsAttributeInfoValid(attributeDataOffset, attributeDataSize, (uint)afsStream.Length, dataBlockEndOffset);
 
                     if (isAttributeInfoValid)
                     {
-                        metadata.AttributesType = AFSMetadata.AttributesTypes.InfoAtEnd;
+                        AttributesInfoType = AttributesInfoType.InfoAtEnd;
                     }
                 }
 
-                if (metadata.ContainsAttributes) NotifyProgress?.Invoke(NotificationTypes.Info, $"Attributes table found at 0x{attributeTableOffset:X8}.");
-                else NotifyProgress?.Invoke(NotificationTypes.Info, "Attributes table not found.");
+                // Read attribute data if there is any
 
-                string[] fileNames = new string[fileCount];
-
-                if (metadata.ContainsAttributes)
+                if (ContainsAttributes)
                 {
-                    // Read Attribute table
+                    afsStream.Position = attributeDataOffset;
 
-                    fs1.Seek(attributeTableOffset, SeekOrigin.Begin);
-
-                    for (int f = 0; f < fileCount; f++)
+                    for (int e = 0; e < entryCount; e++)
                     {
-                        if (toc[f].IsNullEntry)
+                        if (entriesInfo[e].IsNull)
                         {
-                            NotifyProgress?.Invoke(NotificationTypes.Warning, $"Null entry. Skipping... {f + 1}/{fileCount}");
+                            // It's a null entry, so ignore attribute data
 
-                            fileNames[f] = string.Empty;
-                            fs1.Seek(0x30, SeekOrigin.Current);
+                            afsStream.Position += ATTRIBUTE_ELEMENT_SIZE;
 
                             continue;
                         }
                         else
                         {
-                            byte[] name = new byte[32];
-                            fs1.Read(name, 0, name.Length);
-                            fileNames[f] = Encoding.Default.GetString(name).Replace("\0", "");
+                            // It's a valid entry, so read attribute data
 
-                            atrributes[f].Year = br.ReadUInt16();
-                            atrributes[f].Month = br.ReadUInt16();
-                            atrributes[f].Day = br.ReadUInt16();
-                            atrributes[f].Hour = br.ReadUInt16();
-                            atrributes[f].Minute = br.ReadUInt16();
-                            atrributes[f].Second = br.ReadUInt16();
-                            atrributes[f].FileSize = br.ReadUInt32();
+                            byte[] name = new byte[MAX_ENTRY_NAME_LENGTH];
+                            afsStream.Read(name, 0, name.Length);
 
-                            NotifyProgress?.Invoke(NotificationTypes.Info, $"Reading attributes table... {f + 1}/{fileCount}");
+                            entriesInfo[e].Name = Utils.GetStringFromBytes(name);
+                            entriesInfo[e].LastWriteTime = new DateTime(br.ReadUInt16(), br.ReadUInt16(), br.ReadUInt16(), br.ReadUInt16(), br.ReadUInt16(), br.ReadUInt16());
+                            entriesInfo[e].Unknown = br.ReadUInt32();
                         }
                     }
-
-                    fileNames = CheckForDuplicatedFilenames(fileNames);
                 }
                 else
                 {
-                    for (int f = 0; f < fileCount; f++)
+                    for (int e = 0; e < entryCount; e++)
                     {
-                        fileNames[f] = f.ToString("00000000", CultureInfo.InvariantCulture);
+                        entriesInfo[e].Name = $"{e:00000000}";
                     }
                 }
 
-                metadata.FileNames = fileNames;
+                // After gathering all necessary info, create the entries.
 
-                // Extract files
-
-                if (!Directory.Exists(outputDirectory)) Directory.CreateDirectory(outputDirectory);
-
-                for (int f = 0; f < fileCount; f++)
+                for (int e = 0; e < entryCount; e++)
                 {
-                    if (toc[f].IsNullEntry)
-                    {
-                        NotifyProgress?.Invoke(NotificationTypes.Warning, $"Null entry. Skipping... {f + 1}/{fileCount}");
-                        continue;
-                    }
-
-                    NotifyProgress?.Invoke(NotificationTypes.Info, $"Reading files... {f + 1}/{fileCount}");
-
-                    fs1.Seek(toc[f].Offset, SeekOrigin.Begin);
-
-                    string outputFile = Path.Combine(outputDirectory, fileNames[f]);
-                    if (File.Exists(outputFile))
-                    {
-                        NotifyProgress?.Invoke(NotificationTypes.Warning, $"File \"{outputFile}\" already exists. Overwriting.");
-                    }
-
-                    using (FileStream fs = File.OpenWrite(outputFile))
-                    {
-                        fs1.CopySliceTo(fs, (int)toc[f].FileSize);
-                    }
-
-                    if (metadata.ContainsAttributes)
-                    {
-                        try
-                        {
-                            DateTime date = new DateTime(atrributes[f].Year, atrributes[f].Month, atrributes[f].Day, atrributes[f].Hour, atrributes[f].Minute, atrributes[f].Second);
-                            File.SetLastWriteTime(outputFile, date);
-                        }
-                        catch (ArgumentOutOfRangeException)
-                        {
-                            NotifyProgress?.Invoke(NotificationTypes.Warning, "Invalid date. Ignoring.");
-                        }
-                    }
+                    StreamEntry entry = entriesInfo[e].IsNull ? null : new StreamEntry(this, afsStream, entriesInfo[e]);
+                    entries.Add(entry);
                 }
+
+                UpdateDuplicatedEntries();
             }
-
-            metadata.SaveToFile(outputDirectory + ".json");
-
-            NotifyProgress?.Invoke(NotificationTypes.Success, $"\"{Path.GetFileName(inputFile)}\" has been extracted successfully.");
         }
 
-        static string[] CheckForDuplicatedFilenames(string[] fileNames)
+        /// <summary>
+        /// Saves the contents of this AFS object into a stream.
+        /// </summary>
+        /// <param name="outputStream">The stream where the data is going to be saved.</param>
+        public void SaveToStream(Stream outputStream)
         {
-            string[] output = new string[fileNames.Length];
-
-            for (int f = 0; f < fileNames.Length; f++)
+            if (outputStream == null)
             {
-                if (string.IsNullOrEmpty(fileNames[f]))
+                throw new ArgumentNullException(nameof(outputStream));
+            }
+
+            if (outputStream == afsStream)
+            {
+                throw new ArgumentException("Can't save into the same stream the AFS data is being read from.", nameof(outputStream));
+            }
+
+            // Start creating the AFS file
+
+            NotifyProgress?.Invoke(NotificationType.Info, "Creating AFS stream...");
+
+            using (BinaryWriter bw = new BinaryWriter(outputStream))
+            {
+                bw.Write(HeaderMagicType == HeaderMagicType.AFS_20 ? HEADER_MAGIC_20 : HEADER_MAGIC_00);
+                bw.Write(EntryCount);
+
+                // Calculate the offset of each entry
+
+                uint[] offsets = new uint[EntryCount];
+
+                uint currentEntryOffset = Utils.Pad(HEADER_SIZE + (ENTRY_INFO_ELEMENT_SIZE * EntryCount) + ATTRIBUTE_INFO_SIZE, PADDING_SIZE);
+
+                for (int e = 0; e < EntryCount; e++)
                 {
-                    output[f] = string.Empty;
+                    if (entries[e] == null)
+                    {
+                        offsets[e] = 0;
+                    }
+                    else
+                    {
+                        offsets[e] = currentEntryOffset;
+
+                        currentEntryOffset += entries[e].Size;
+                        currentEntryOffset = Utils.Pad(currentEntryOffset, PADDING_SIZE);
+                    }
+                }
+
+                // Write entries info
+
+                for (int e = 0; e < EntryCount; e++)
+                {
+                    NotifyProgress?.Invoke(NotificationType.Info, $"Writing entry info... {e + 1}/{EntryCount}");
+
+                    if (entries[e] == null)
+                    {
+                        bw.Write((uint)0);
+                        bw.Write((uint)0);
+                    }
+                    else
+                    {
+                        bw.Write(offsets[e]);
+                        bw.Write(entries[e].Size);
+                    }
+                }
+
+                // Write attributes info if available
+
+                outputStream.Position = HEADER_SIZE + (EntryCount * ENTRY_INFO_ELEMENT_SIZE);
+                Utils.FillStreamWithZeroes(outputStream, offsets[0] - (uint)outputStream.Position);
+
+                uint attributesInfoOffset = currentEntryOffset;
+
+                if (ContainsAttributes)
+                {
+                    if (AttributesInfoType == AttributesInfoType.InfoAtBeginning)
+                        outputStream.Position = HEADER_SIZE + (EntryCount * ENTRY_INFO_ELEMENT_SIZE);
+                    else if (AttributesInfoType == AttributesInfoType.InfoAtEnd)
+                        outputStream.Position = offsets[0] - ATTRIBUTE_INFO_SIZE;
+
+                    bw.Write(attributesInfoOffset);
+                    bw.Write(EntryCount * ATTRIBUTE_ELEMENT_SIZE);
+                }
+
+                // Write entries data to stream
+
+                for (int e = 0; e < EntryCount; e++)
+                {
+                    if (entries[e] == null)
+                    {
+                        NotifyProgress?.Invoke(NotificationType.Info, $"Null file... {e + 1}/{EntryCount}");
+                    }
+                    else
+                    {
+                        NotifyProgress?.Invoke(NotificationType.Info, $"Writing entry... {e + 1}/{EntryCount}");
+
+                        outputStream.Position = offsets[e];
+
+                        using (Stream entryStream = entries[e].GetStream())
+                        {
+                            entryStream.CopyTo(outputStream);
+                        }
+                    }
+                }
+
+                // Write attributes if available
+
+                if (ContainsAttributes)
+                {
+                    outputStream.Position = attributesInfoOffset;
+
+                    for (int e = 0; e < EntryCount; e++)
+                    {
+                        if (entries[e] == null)
+                        {
+                            NotifyProgress?.Invoke(NotificationType.Info, $"Null file... {e + 1}/{EntryCount}");
+
+                            outputStream.Position += ATTRIBUTE_ELEMENT_SIZE;
+                        }
+                        else
+                        {
+                            NotifyProgress?.Invoke(NotificationType.Info, $"Writing attribute... {e + 1}/{EntryCount}");
+
+                            byte[] name = Encoding.Default.GetBytes(entries[e].Name);
+                            outputStream.Write(name, 0, name.Length);
+                            outputStream.Position += MAX_ENTRY_NAME_LENGTH - name.Length;
+
+                            bw.Write((ushort)entries[e].LastWriteTime.Year);
+                            bw.Write((ushort)entries[e].LastWriteTime.Month);
+                            bw.Write((ushort)entries[e].LastWriteTime.Day);
+                            bw.Write((ushort)entries[e].LastWriteTime.Hour);
+                            bw.Write((ushort)entries[e].LastWriteTime.Minute);
+                            bw.Write((ushort)entries[e].LastWriteTime.Second);
+                            bw.Write(entries[e].Unknown);
+                        }
+                    }
+                }
+
+                // Pad final zeroes
+
+                uint currentPosition = (uint)outputStream.Position;
+                uint endOfFile = Utils.Pad(currentPosition, PADDING_SIZE);
+                Utils.FillStreamWithZeroes(outputStream, endOfFile - currentPosition);
+
+                // Make sure the stream is the size of the AFS data (in case the stream was bigger)
+
+                outputStream.SetLength(endOfFile);
+            }
+
+            NotifyProgress?.Invoke(NotificationType.Success, "AFS stream has been saved successfully.");
+        }
+
+        /// <summary>
+        /// Adds a new entry from a file.
+        /// </summary>
+        /// <param name="fileNamePath">Path to the file that will be added.</param>
+        /// <param name="entryName">The name of the entry.</param>
+        public void AddEntryFromFile(string fileNamePath, string entryName)
+        {
+            if (string.IsNullOrEmpty(fileNamePath))
+            {
+                throw new ArgumentNullException(nameof(entryName));
+            }
+
+            if (!File.Exists(fileNamePath))
+            {
+                throw new FileNotFoundException($"File \"{fileNamePath}\" has not been found.", fileNamePath);
+            }
+
+            if (string.IsNullOrEmpty(entryName))
+            {
+                throw new ArgumentNullException(nameof(entryName));
+            }
+
+            entries.Add(new FileEntry(this, fileNamePath));
+            UpdateDuplicatedEntries();
+        }
+
+        /// <summary>
+        /// Removes an entry from the AFS object.
+        /// </summary>
+        /// <param name="entry">The entry to remove.</param>
+        public void RemoveEntry(Entry entry)
+        {
+            if (entry == null)
+            {
+                throw new ArgumentNullException(nameof(entry));
+            }
+
+            if (entries.Contains(entry))
+            {
+                entries.Remove(entry);
+                UpdateDuplicatedEntries();
+            }
+        }
+
+        /// <summary>
+        /// Extracts one entry to a file.
+        /// </summary>
+        /// <param name="entry">The entry to extract.</param>
+        /// <param name="outputFilePath">The path to the file where the entry will be saved. If it doesn't exist, it will be created.</param>
+        public void ExtractEntry(Entry entry, string outputFilePath)
+        {
+            if (entry == null)
+            {
+                throw new ArgumentNullException(nameof(entry));
+            }
+
+            if (string.IsNullOrEmpty(outputFilePath))
+            {
+                throw new ArgumentNullException(nameof(outputFilePath));
+            }
+
+            using (FileStream outputStream = File.Create(outputFilePath))
+            using (Stream entryStream = entry.GetStream())
+            {
+                entryStream.CopyTo(outputStream);
+            }
+
+            if (ContainsAttributes)
+            {
+                File.SetLastWriteTime(outputFilePath, entry.LastWriteTime);
+            }
+        }
+
+        /// <summary>
+        /// Extracts all the entries from the AFS object.
+        /// </summary>
+        /// <param name="outputDirectory">The directory where the entries will be saved. If it doesn't exist, it will be created.</param>
+        public void ExtractAllEntries(string outputDirectory)
+        {
+            if (string.IsNullOrEmpty(outputDirectory))
+            {
+                throw new ArgumentNullException(nameof(outputDirectory));
+            }
+
+            if (!Directory.Exists(outputDirectory)) Directory.CreateDirectory(outputDirectory);
+
+            for (int e = 0; e < EntryCount; e++)
+            {
+                if (entries[e] == null)
+                {
+                    NotifyProgress?.Invoke(NotificationType.Warning, $"Null entry. Skipping... {e + 1}/{EntryCount}");
                     continue;
                 }
 
-                int count = 0;
+                NotifyProgress?.Invoke(NotificationType.Info, $"Extracting entry... {e + 1}/{EntryCount}");
 
-                for (int o = 0; o < f; o++)
+                string outputFilePath = Path.Combine(outputDirectory, entries[e].UniqueName);
+                if (File.Exists(outputFilePath))
                 {
-                    if (fileNames[f] == fileNames[o]) count++;
+                    NotifyProgress?.Invoke(NotificationType.Warning, $"File \"{outputFilePath}\" already exists. Overwriting...");
                 }
 
-                if (count == 0) output[f] = fileNames[f];
-                else output[f] = $"{Path.GetFileNameWithoutExtension(fileNames[f])} ({count}){Path.GetExtension(fileNames[f])}";
+                ExtractEntry(entries[e], outputFilePath);
             }
 
-            return output;
+            NotifyProgress?.Invoke(NotificationType.Success, $"Finished extracting all entries successfully.");
         }
 
-        static bool IsAttributeInfoValid(uint attributesOffset, uint attributesSize, uint afsFileSize, uint fileCount, uint lastFileEndOffset)
+        internal void UpdateDuplicatedEntries()
+        {
+            // There can be multiple files with the same name, so keep track of duplicates
+
+            duplicates.Clear();
+
+            for (int e = 0; e < EntryCount; e++)
+            {
+                if (entries[e] == null) continue;
+
+                bool found = duplicates.TryGetValue(entries[e].Name, out uint duplicateCount);
+
+                if (found) duplicates[entries[e].Name] = ++duplicateCount;
+                else duplicates.Add(entries[e].Name, 0);
+
+                entries[e].UpdateUniqueName(duplicateCount);
+            }
+        }
+
+        private bool IsAttributeInfoValid(uint attributesOffset, uint attributesSize, uint afsFileSize, uint dataBlockEndOffset)
         {
             // If zeroes are found, info is not valid.
             if (attributesOffset == 0) return false;
@@ -425,33 +481,13 @@ namespace AFSLib
 
             // Check if this info makes sense, as there are times where random
             // data can be found instead of attribute offset and size.
-            if (attributesSize > afsFileSize - lastFileEndOffset) return false;
-            if (attributesSize < fileCount * 0x30) return false;
-            if (attributesOffset < lastFileEndOffset) return false;
+            if (attributesSize > afsFileSize - dataBlockEndOffset) return false;
+            if (attributesSize < EntryCount * ATTRIBUTE_ELEMENT_SIZE) return false;
+            if (attributesOffset < dataBlockEndOffset) return false;
             if (attributesOffset > afsFileSize - attributesSize) return false;
 
             // If the above conditions are not met, it looks like it's valid attribute data
             return true;
-        }
-
-        struct TableOfContents
-        {
-            public uint Offset;
-            public uint FileSize;
-
-            public bool IsNullEntry { get { return Offset == 0 && FileSize == 0; } }
-        }
-
-        struct FileAttributes
-        {
-            public string FileName;
-            public ushort Year;
-            public ushort Month;
-            public ushort Day;
-            public ushort Hour;
-            public ushort Minute;
-            public ushort Second;
-            public uint FileSize;
         }
     }
 }
