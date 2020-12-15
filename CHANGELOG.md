@@ -6,6 +6,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [1.2.4] - 2020-12-15
+### Fixed
+- Fixed trying to extract AFS files into non-existing directories for games like Soul Calibur 2, which store truncated paths instead of file names.
+
 ## [1.2.3] - 2020-10-31
 ### Fixed
 - Fixed error when trying to read the attribute information of an AFS archive that contains random bytes as padding.

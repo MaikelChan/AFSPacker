@@ -231,6 +231,10 @@ namespace AFSPacker
                         fs1.Read(name, 0, name.Length);
                         fileName[n] = Encoding.Default.GetString(name).Replace("\0", "");
 
+                        // There are some cases where instead of a file name, an AFS file will store a truncated path like in Soul Calibur 2.
+                        // Remove that path just in case to prevent from extracting into non-existing directories
+                        fileName[n] = Path.GetFileName(fileName[n]);
+
                         atrributes[n].Year = br.ReadUInt16();
                         atrributes[n].Month = br.ReadUInt16();
                         atrributes[n].Day = br.ReadUInt16();
