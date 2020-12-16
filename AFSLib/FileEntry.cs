@@ -6,11 +6,11 @@ namespace AFSLib
     {
         private readonly FileInfo fileInfo;
 
-        internal FileEntry(AFS afs, string fileNamePath) : base(afs)
+        internal FileEntry(AFS afs, string fileNamePath, string entryName) : base(afs)
         {
             fileInfo = new FileInfo(fileNamePath);
 
-            name = fileInfo.Name;
+            rawName = entryName;
             size = (uint)fileInfo.Length;
             lastWriteTime = fileInfo.LastWriteTime;
             unknown = (uint)fileInfo.Length;

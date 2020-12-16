@@ -11,7 +11,7 @@ namespace AFSPacker
 
         public HeaderMagicType HeaderMagicType { get; set; }
         public AttributesInfoType AttributesInfoType { get; set; }
-        public string[] EntryNames { get; set; }
+        public AFSMetadataEntry[] Entries { get; set; }
 
         const uint CURRENT_VERSION = 1;
 
@@ -31,11 +31,15 @@ namespace AFSPacker
 
             HeaderMagicType = afs.HeaderMagicType;
             AttributesInfoType = afs.AttributesInfoType;
-            EntryNames = new string[afs.EntryCount];
+            Entries = new AFSMetadataEntry[afs.EntryCount];
 
             for (int e = 0; e < afs.EntryCount; e++)
             {
-                EntryNames[e] = afs.Entries[e].UniqueName;
+                Entries[e] = new AFSMetadataEntry()
+                {
+                    RawName = afs.Entries[e].RawName,
+                    Name = afs.Entries[e].Name
+                };
             }
         }
 

@@ -318,7 +318,7 @@ namespace AFSLib
                         {
                             NotifyProgress?.Invoke(NotificationType.Info, $"Writing attribute... {e + 1}/{EntryCount}");
 
-                            byte[] name = Encoding.Default.GetBytes(entries[e].Name);
+                            byte[] name = Encoding.Default.GetBytes(entries[e].RawName);
                             outputStream.Write(name, 0, name.Length);
                             outputStream.Position += MAX_ENTRY_NAME_LENGTH - name.Length;
 
@@ -369,7 +369,7 @@ namespace AFSLib
                 throw new ArgumentNullException(nameof(entryName));
             }
 
-            entries.Add(new FileEntry(this, fileNamePath));
+            entries.Add(new FileEntry(this, fileNamePath, entryName));
             UpdateDuplicatedEntries();
         }
 
@@ -443,7 +443,7 @@ namespace AFSLib
 
                 NotifyProgress?.Invoke(NotificationType.Info, $"Extracting entry... {e + 1}/{EntryCount}");
 
-                string outputFilePath = Path.Combine(outputDirectory, entries[e].UniqueName);
+                string outputFilePath = Path.Combine(outputDirectory, entries[e].Name);
                 if (File.Exists(outputFilePath))
                 {
                     NotifyProgress?.Invoke(NotificationType.Warning, $"File \"{outputFilePath}\" already exists. Overwriting...");
@@ -465,12 +465,34 @@ namespace AFSLib
             {
                 if (entries[e] == null) continue;
 
-                bool found = duplicates.TryGetValue(entries[e].Name, out uint duplicateCount);
+                // There are some cases where instead of a file name, an AFS file will store a truncated path like in Soul Calibur 2.
+                // Remove that path just in case to prevent from extracting into non-existing directories.
+                string cleanedName = Path.GetFileName(entries[e].RawName);
 
-                if (found) duplicates[entries[e].Name] = ++duplicateCount;
-                else duplicates.Add(entries[e].Name, 0);
+                bool found = duplicates.TryGetValue(cleanedName, out uint duplicateCount);
 
-                entries[e].UpdateUniqueName(duplicateCount);
+                if (found) duplicates[cleanedName] = ++duplicateCount;
+                else duplicates.Add(cleanedName, 0);
+
+                if (duplicateCount > 0)
+                {
+                    string nameBase = Path.GetFileNameWithoutExtension(cleanedName);
+                    string nameDuplicate = $" ({duplicateCount})";
+                    string nameExtension = Path.GetExtension(cleanedName);
+
+                    int totalNameLength = nameBase.Length + nameDuplicate.Length + nameExtension.Length;
+
+                    if (totalNameLength > MAX_ENTRY_NAME_LENGTH)
+                    {
+                        int exceedingCharacters = totalNameLength - (int)MAX_ENTRY_NAME_LENGTH;
+
+                        nameBase = nameBase.Substring(0, nameBase.Length - exceedingCharacters);
+                    }
+
+                    cleanedName = nameBase + nameDuplicate + nameExtension;
+                }
+
+                entries[e].UpdateName(cleanedName);
             }
         }
 

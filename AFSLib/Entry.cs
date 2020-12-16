@@ -6,10 +6,16 @@ namespace AFSLib
     public abstract class Entry
     {
         /// <summary>
-        /// Name of the entry. It can't be longer than 32 characters, including extension.
+        /// Raw name of the entry. It can contain special characters like "/", "\" or ":", and it can be the same name as other entries. Don't use this name to extract a file into the operating system.
+        /// </summary>
+        public string RawName => rawName;
+        protected string rawName;
+
+        /// <summary>
+        /// The name of the entry. It will be unique and won't contain special characters like "/", "\" or ":". It can't be longer than 32 characters, including extension.
         /// </summary>
         public string Name => name;
-        protected string name;
+        private string name;
 
         /// <summary>
         /// Size of the entry data.
@@ -28,12 +34,6 @@ namespace AFSLib
         /// </summary>
         public uint Unknown => unknown;
         protected uint unknown;
-
-        /// <summary>
-        /// An AFS file can contain multiple entries with the same name. Trying to extract those entries, each one would overwrite the previous one. So this provides a unique name that won't cause conflicts.
-        /// </summary>
-        public string UniqueName => uniqueName;
-        private string uniqueName;
 
         private readonly AFS afs;
 
@@ -54,16 +54,23 @@ namespace AFSLib
                 throw new ArgumentOutOfRangeException(nameof(name), $"Entry name can't be longer than {AFS.MAX_ENTRY_NAME_LENGTH} characters: \"{name}\".");
             }
 
-            this.name = name;
+            char[] invalidCharacters = Path.GetInvalidFileNameChars();
+
+            for (int c = 0; c < invalidCharacters.Length; c++)
+            {
+                if (name.Contains(invalidCharacters[c].ToString()))
+                {
+                    throw new ArgumentException($"The entry name \"{name}\" can't contain the character: \"{invalidCharacters[c]}\"", nameof(name));
+                }
+            }
+
+            rawName = name;
             afs.UpdateDuplicatedEntries();
         }
 
-        internal void UpdateUniqueName(uint duplicateCount)
+        internal void UpdateName(string name)
         {
-            if (duplicateCount > 0)
-                uniqueName = $"{Path.GetFileNameWithoutExtension(Name)} ({duplicateCount}){Path.GetExtension(Name)}";
-            else
-                uniqueName = Name;
+            this.name = name;
         }
 
         internal abstract Stream GetStream();

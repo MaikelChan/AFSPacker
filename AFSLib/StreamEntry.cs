@@ -12,7 +12,7 @@ namespace AFSLib
             this.baseStream = baseStream;
             baseStreamDataOffset = info.Offset;
 
-            name = info.Name;
+            rawName = info.Name;
             size = info.Size;
             lastWriteTime = info.LastWriteTime;
             unknown = info.Unknown;

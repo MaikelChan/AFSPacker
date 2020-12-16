@@ -37,10 +37,10 @@ namespace AFSPacker
                     afs.HeaderMagicType = metadata.HeaderMagicType;
                     afs.AttributesInfoType = metadata.AttributesInfoType;
 
-                    for (int e = 0; e < metadata.EntryNames.Length; e++)
+                    for (int e = 0; e < metadata.Entries.Length; e++)
                     {
-                        string fileNamePath = Path.Combine(args[1], metadata.EntryNames[e]);
-                        afs.AddEntryFromFile(fileNamePath, metadata.EntryNames[e]);
+                        string fileNamePath = Path.Combine(args[1], metadata.Entries[e].Name);
+                        afs.AddEntryFromFile(fileNamePath, metadata.Entries[e].RawName);
                     }
 
                     using (FileStream outputStream = File.Create(args[2]))
@@ -108,7 +108,7 @@ namespace AFSPacker
                             }
                             else
                             {
-                                string name = afs.ContainsAttributes ? entries[e].Name.PadRight(32) : "N/A".PadRight(32);
+                                string name = afs.ContainsAttributes ? entries[e].RawName.PadRight(32) : "N/A".PadRight(32);
                                 string size = entries[e].Size.ToString("X8");
                                 string time = afs.ContainsAttributes ? entries[e].LastWriteTime.ToString() : "N/A";
 
