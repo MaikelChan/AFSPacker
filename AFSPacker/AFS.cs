@@ -10,6 +10,7 @@ namespace AFSPacker
         const uint HEADER_MAGIC_1 = 0x00534641; // AFS
         const uint HEADER_MAGIC_2 = 0x20534641;
         const string NULL_FILE = "#NULL#";
+        const string DUMMY_ENTRY_NAME_FOR_BLANK_RAW_NAME = "_NO_NAME";
 
         public enum NotificationTypes { Info, Warning, Error }
 
@@ -231,9 +232,18 @@ namespace AFSPacker
                         fs1.Read(name, 0, name.Length);
                         fileName[n] = Encoding.Default.GetString(name).Replace("\0", "");
 
-                        // There are some cases where instead of a file name, an AFS file will store a truncated path like in Soul Calibur 2.
-                        // Remove that path just in case to prevent from extracting into non-existing directories
-                        fileName[n] = Path.GetFileName(fileName[n]);
+                        if (string.IsNullOrWhiteSpace(fileName[n]))
+                        {
+                            // The game "Winback 2 Project Poseidon" has attributes with empty file names.
+                            // Give the files a dummy name for them to extract properly.
+                            fileName[n] = DUMMY_ENTRY_NAME_FOR_BLANK_RAW_NAME;
+                        }
+                        else
+                        {
+                            // There are some cases where instead of a file name, an AFS file will store a truncated path like in Soul Calibur 2.
+                            // Remove that path just in case to prevent from extracting into non-existing directories
+                            fileName[n] = Path.GetFileName(fileName[n]);
+                        }
 
                         atrributes[n].Year = br.ReadUInt16();
                         atrributes[n].Month = br.ReadUInt16();

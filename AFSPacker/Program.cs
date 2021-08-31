@@ -17,54 +17,50 @@ namespace AFSPacker
 
             AFS.NotifyProgress += Progress;
 
+#if !DEBUG
+            try
+            {
+#endif
             if (args[0] == "-c")
             {
-                try
+                if (args.Length == 3)
                 {
-                    if (args.Length == 3)
-                    {
-                        AFS.CreateAFS(args[1], args[2]);
-                    }
-                    else
-                    {
-                        bool preserveFileNames = true;
-                        string listfile = null;
+                    AFS.CreateAFS(args[1], args[2]);
+                }
+                else
+                {
+                    bool preserveFileNames = true;
+                    string listfile = null;
 
-                        for (int n = 3; n < args.Length; n++)
-                        {
-                            if (args[n] == "-nf" && preserveFileNames == true) preserveFileNames = false;
-                            else if (args[n] != "-nf" && listfile == null) listfile = args[n];
-                            else { ShowUsage(); return; }
-                        }
-
-                        AFS.CreateAFS(args[1], args[2], listfile, preserveFileNames);
+                    for (int n = 3; n < args.Length; n++)
+                    {
+                        if (args[n] == "-nf" && preserveFileNames == true) preserveFileNames = false;
+                        else if (args[n] != "-nf" && listfile == null) listfile = args[n];
+                        else { ShowUsage(); return; }
                     }
 
-                    Console.ForegroundColor = ConsoleColor.Green;
-                    Console.WriteLine("\n\nOperation complete.");
+                    AFS.CreateAFS(args[1], args[2], listfile, preserveFileNames);
                 }
-                catch (Exception e)
-                {
-                    Console.ForegroundColor = ConsoleColor.Red;
-                    Console.WriteLine("\n\n[Error] " + e.Message);
-                }
+
+                Console.ForegroundColor = ConsoleColor.Green;
+                Console.WriteLine("\n\nOperation complete.");
             }
             else if (args[0] == "-e")
             {
-                try
-                {
-                    if (args.Length == 3) AFS.ExtractAFS(args[1], args[2]);
-                    else AFS.ExtractAFS(args[1], args[2], args[3]);
+                if (args.Length == 3) AFS.ExtractAFS(args[1], args[2]);
+                else AFS.ExtractAFS(args[1], args[2], args[3]);
 
-                    Console.ForegroundColor = ConsoleColor.Green;
-                    Console.WriteLine("\n\nOperation complete.");
-                }
-                catch (Exception e)
-                {
-                    Console.ForegroundColor = ConsoleColor.Red;
-                    Console.WriteLine("\n\n[Error] " + e.Message);
-                }
+                Console.ForegroundColor = ConsoleColor.Green;
+                Console.WriteLine("\n\nOperation complete.");
             }
+#if !DEBUG
+            }
+            catch (Exception e)
+            {
+                Console.ForegroundColor = ConsoleColor.Red;
+                Console.WriteLine("\n\n[Error] " + e.Message);
+            }
+#endif
 
             AFS.NotifyProgress -= Progress;
 
