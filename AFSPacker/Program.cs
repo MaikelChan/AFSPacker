@@ -162,13 +162,25 @@ namespace AFSPacker
 
             Console.WriteLine();
             Console.WriteLine("        #----------------------------------------------------------------#");
+
             Console.WriteLine("        #                   AFS Packer - Version " + v + "                   #");
-            Console.WriteLine("        #                  Uses AFSLib - Version " + lv + "                   #");
-            Console.Write("        #      By PacoChan - ");
+            Console.Write("        #             ");
             Console.ForegroundColor = ConsoleColor.Cyan;
             Console.Write("https://github.com/MaikelChan/AFSPacker");
             Console.ForegroundColor = ConsoleColor.Yellow;
-            Console.WriteLine("     #");
+            Console.WriteLine("            #");
+
+            Console.WriteLine("        #                                                                #");
+
+            Console.WriteLine("        #                Powered by AFSLib - Version " + lv + "               #");
+            Console.Write("        #              ");
+            Console.ForegroundColor = ConsoleColor.Cyan;
+            Console.Write("https://github.com/MaikelChan/AFSLib");
+            Console.ForegroundColor = ConsoleColor.Yellow;
+            Console.WriteLine("              #");
+
+            Console.WriteLine("        #                                                                #");
+            Console.WriteLine("        #                    By MaikelChan / PacoChan                    #");
             Console.WriteLine("        #----------------------------------------------------------------#\n\n");
         }
 
