@@ -65,7 +65,7 @@ namespace AFSLib
             }
 
             rawName = name;
-            afs.UpdateDuplicatedEntries();
+            afs.UpdateEntriesNames();
         }
 
         internal void UpdateName(string name)

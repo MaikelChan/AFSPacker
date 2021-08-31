@@ -39,9 +39,6 @@ namespace AFSLib
         public event NotifyProgressDelegate NotifyProgress;
         public delegate void NotifyProgressDelegate(NotificationType type, string message);
 
-        internal readonly List<Entry> entries;
-        internal readonly Dictionary<string, uint> duplicates;
-
         internal const uint HEADER_MAGIC_00 = 0x00534641; // AFS
         internal const uint HEADER_MAGIC_20 = 0x20534641;
         internal const uint HEADER_SIZE = 0x8;
@@ -51,8 +48,12 @@ namespace AFSLib
         internal const uint MAX_ENTRY_NAME_LENGTH = 0x20;
         internal const uint PADDING_SIZE = 0x800;
 
+        internal const string DUMMY_ENTRY_NAME_FOR_BLANK_RAW_NAME = "_NO_NAME";
+
         private readonly Stream afsStream;
+        private readonly List<Entry> entries;
         private readonly ReadOnlyCollection<Entry> readonlyEntries;
+        private readonly Dictionary<string, uint> duplicates;
 
         /// <summary>
         /// Create an empty AFS object.
@@ -192,7 +193,7 @@ namespace AFSLib
                     entries.Add(entry);
                 }
 
-                UpdateDuplicatedEntries();
+                UpdateEntriesNames();
             }
         }
 
@@ -364,13 +365,13 @@ namespace AFSLib
                 throw new FileNotFoundException($"File \"{fileNamePath}\" has not been found.", fileNamePath);
             }
 
-            if (string.IsNullOrEmpty(entryName))
+            if (entryName == null)
             {
                 throw new ArgumentNullException(nameof(entryName));
             }
 
             entries.Add(new FileEntry(this, fileNamePath, entryName));
-            UpdateDuplicatedEntries();
+            UpdateEntriesNames();
         }
 
         /// <summary>
@@ -387,7 +388,7 @@ namespace AFSLib
             if (entries.Contains(entry))
             {
                 entries.Remove(entry);
-                UpdateDuplicatedEntries();
+                UpdateEntriesNames();
             }
         }
 
@@ -455,7 +456,10 @@ namespace AFSLib
             NotifyProgress?.Invoke(NotificationType.Success, $"Finished extracting all entries successfully.");
         }
 
-        internal void UpdateDuplicatedEntries()
+        /// <summary>
+        /// Updates the names of all the entries to be unique in case of duplicates and cleans them up to not contain invalid characters.
+        /// </summary>
+        internal void UpdateEntriesNames()
         {
             // There can be multiple files with the same name, so keep track of duplicates
 
@@ -465,9 +469,20 @@ namespace AFSLib
             {
                 if (entries[e] == null) continue;
 
-                // There are some cases where instead of a file name, an AFS file will store a truncated path like in Soul Calibur 2.
-                // Remove that path just in case to prevent from extracting into non-existing directories.
-                string cleanedName = Path.GetFileName(entries[e].RawName);
+                string cleanedName;
+
+                if (string.IsNullOrWhiteSpace(entries[e].RawName))
+                {
+                    // The game "Winback 2 Project Poseidon" has attributes with empty file names.
+                    // Give the files a dummy name for them to extract properly.
+                    cleanedName = DUMMY_ENTRY_NAME_FOR_BLANK_RAW_NAME;
+                }
+                else
+                {
+                    // There are some cases where instead of a file name, an AFS file will store a truncated path like in Soul Calibur 2.
+                    // Remove that path just in case to prevent from extracting into non-existing directories.
+                    cleanedName = Path.GetFileName(entries[e].RawName);
+                }
 
                 bool found = duplicates.TryGetValue(cleanedName, out uint duplicateCount);
 
