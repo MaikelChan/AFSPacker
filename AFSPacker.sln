@@ -5,8 +5,6 @@ VisualStudioVersion = 16.0.30611.23
 MinimumVisualStudioVersion = 10.0.40219.1
 Project("{9A19103F-16F7-4668-BE54-9A1E7A4F7556}") = "AFSPacker", "AFSPacker\AFSPacker.csproj", "{CC3648A5-E91F-4CF0-BBA3-10422A17B4D9}"
 EndProject
-Project("{9A19103F-16F7-4668-BE54-9A1E7A4F7556}") = "AFSLib", "AFSLib\AFSLib.csproj", "{12457AF2-EE52-45F8-AC07-85451250C630}"
-EndProject
 Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = "Solution Items", "Solution Items", "{72A5AA7B-3CAE-46FC-A5F5-92E83AED8910}"
 	ProjectSection(SolutionItems) = preProject
 		.editorconfig = .editorconfig
@@ -22,10 +20,6 @@ Global
 		{CC3648A5-E91F-4CF0-BBA3-10422A17B4D9}.Debug|Any CPU.Build.0 = Debug|Any CPU
 		{CC3648A5-E91F-4CF0-BBA3-10422A17B4D9}.Release|Any CPU.ActiveCfg = Release|Any CPU
 		{CC3648A5-E91F-4CF0-BBA3-10422A17B4D9}.Release|Any CPU.Build.0 = Release|Any CPU
-		{12457AF2-EE52-45F8-AC07-85451250C630}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
-		{12457AF2-EE52-45F8-AC07-85451250C630}.Debug|Any CPU.Build.0 = Debug|Any CPU
-		{12457AF2-EE52-45F8-AC07-85451250C630}.Release|Any CPU.ActiveCfg = Release|Any CPU
-		{12457AF2-EE52-45F8-AC07-85451250C630}.Release|Any CPU.Build.0 = Release|Any CPU
 	EndGlobalSection
 	GlobalSection(SolutionProperties) = preSolution
 		HideSolutionNode = FALSE

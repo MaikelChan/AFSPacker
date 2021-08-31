@@ -155,11 +155,15 @@ namespace AFSPacker
             Version version = Assembly.GetExecutingAssembly().GetName().Version;
             string v = $"{version.Major}.{version.Minor}.{version.Build}";
 
+            Version libVersion = AFS.GetVersion();
+            string lv = $"{libVersion.Major}.{libVersion.Minor}.{libVersion.Build}";
+
             Console.ForegroundColor = ConsoleColor.Yellow;
 
             Console.WriteLine();
             Console.WriteLine("        #----------------------------------------------------------------#");
             Console.WriteLine("        #                   AFS Packer - Version " + v + "                   #");
+            Console.WriteLine("        #                  Uses AFSLib - Version " + lv + "                   #");
             Console.Write("        #      By PacoChan - ");
             Console.ForegroundColor = ConsoleColor.Cyan;
             Console.Write("https://github.com/MaikelChan/AFSPacker");
