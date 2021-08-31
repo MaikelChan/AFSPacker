@@ -1,0 +1,3 @@
+[submodule "AFSLib"]
+	path = AFSLib
+	url = https://github.com/MaikelChan/AFSLib.git
