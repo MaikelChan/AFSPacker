@@ -3,7 +3,6 @@ using System;
 using System.Collections.ObjectModel;
 using System.IO;
 using System.Reflection;
-using System.Text.Json;
 
 namespace AFSPacker
 {
@@ -19,8 +18,10 @@ namespace AFSPacker
                 return;
             }
 
+#if !DEBUG
             try
             {
+#endif
                 if (args[0] == "-c")
                 {
                     if (args.Length != 3)
@@ -117,6 +118,7 @@ namespace AFSPacker
                         }
                     }
                 }
+#if !DEBUG
             }
             catch (Exception e)
             {
@@ -124,6 +126,7 @@ namespace AFSPacker
                 Console.ForegroundColor = ConsoleColor.Red;
                 Console.WriteLine($"[{DateTime.Now.ToLongTimeString()}] [Error] {e.Message}");
             }
+#endif
 
             Console.ForegroundColor = ConsoleColor.Gray;
         }

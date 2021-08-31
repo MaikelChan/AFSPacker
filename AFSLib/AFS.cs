@@ -51,9 +51,11 @@ namespace AFSLib
         internal const string DUMMY_ENTRY_NAME_FOR_BLANK_RAW_NAME = "_NO_NAME";
 
         private readonly Stream afsStream;
+
         private readonly List<Entry> entries;
         private readonly ReadOnlyCollection<Entry> readonlyEntries;
         private readonly Dictionary<string, uint> duplicates;
+        private readonly string[] invalidPathChars;
 
         /// <summary>
         /// Create an empty AFS object.
@@ -63,6 +65,14 @@ namespace AFSLib
             entries = new List<Entry>();
             readonlyEntries = entries.AsReadOnly();
             duplicates = new Dictionary<string, uint>();
+
+            char[] chars = Path.GetInvalidPathChars();
+            invalidPathChars = new string[chars.Length];
+            for (int ipc = 0; ipc < chars.Length; ipc++)
+            {
+                invalidPathChars[ipc] = chars[ipc].ToString();
+            }
+
             HeaderMagicType = HeaderMagicType.AFS_00;
             AttributesInfoType = AttributesInfoType.InfoAtBeginning;
         }
@@ -409,6 +419,12 @@ namespace AFSLib
                 throw new ArgumentNullException(nameof(outputFilePath));
             }
 
+            string directory = Path.GetDirectoryName(outputFilePath);
+            if (!string.IsNullOrEmpty(directory) && !Directory.Exists(directory))
+            {
+                Directory.CreateDirectory(directory);
+            }
+
             using (FileStream outputStream = File.Create(outputFilePath))
             using (Stream entryStream = entry.GetStream())
             {
@@ -469,45 +485,23 @@ namespace AFSLib
             {
                 if (entries[e] == null) continue;
 
-                string cleanedName;
+                string cleanedUpName = CleanUpName(entries[e].RawName);
 
-                if (string.IsNullOrWhiteSpace(entries[e].RawName))
-                {
-                    // The game "Winback 2 Project Poseidon" has attributes with empty file names.
-                    // Give the files a dummy name for them to extract properly.
-                    cleanedName = DUMMY_ENTRY_NAME_FOR_BLANK_RAW_NAME;
-                }
-                else
-                {
-                    // There are some cases where instead of a file name, an AFS file will store a truncated path like in Soul Calibur 2.
-                    // Remove that path just in case to prevent from extracting into non-existing directories.
-                    cleanedName = Path.GetFileName(entries[e].RawName);
-                }
+                bool found = duplicates.TryGetValue(cleanedUpName, out uint duplicateCount);
 
-                bool found = duplicates.TryGetValue(cleanedName, out uint duplicateCount);
-
-                if (found) duplicates[cleanedName] = ++duplicateCount;
-                else duplicates.Add(cleanedName, 0);
+                if (found) duplicates[cleanedUpName] = ++duplicateCount;
+                else duplicates.Add(cleanedUpName, 0);
 
                 if (duplicateCount > 0)
                 {
-                    string nameBase = Path.GetFileNameWithoutExtension(cleanedName);
+                    string nameWithoutExtension = Path.ChangeExtension(cleanedUpName, null);
                     string nameDuplicate = $" ({duplicateCount})";
-                    string nameExtension = Path.GetExtension(cleanedName);
+                    string nameExtension = Path.GetExtension(cleanedUpName);
 
-                    int totalNameLength = nameBase.Length + nameDuplicate.Length + nameExtension.Length;
-
-                    if (totalNameLength > MAX_ENTRY_NAME_LENGTH)
-                    {
-                        int exceedingCharacters = totalNameLength - (int)MAX_ENTRY_NAME_LENGTH;
-
-                        nameBase = nameBase.Substring(0, nameBase.Length - exceedingCharacters);
-                    }
-
-                    cleanedName = nameBase + nameDuplicate + nameExtension;
+                    cleanedUpName = nameWithoutExtension + nameDuplicate + nameExtension;
                 }
 
-                entries[e].UpdateName(cleanedName);
+                entries[e].UpdateName(cleanedUpName);
             }
         }
 
@@ -526,6 +520,32 @@ namespace AFSLib
 
             // If the above conditions are not met, it looks like it's valid attribute data
             return true;
+        }
+
+        private string CleanUpName(string name)
+        {
+            if (string.IsNullOrWhiteSpace(name))
+            {
+                // The game "Winback 2: Project Poseidon" has attributes with empty file names.
+                // Give the files a dummy name for them to extract properly.
+                return DUMMY_ENTRY_NAME_FOR_BLANK_RAW_NAME;
+            }
+
+            // There are some cases where instead of a file name, an AFS file will store a path, like in Soul Calibur 2 or Crimson Tears.
+            // Let's make sure there aren't any invalid characters in the path so the OS doesn't complain.
+
+            string cleanedUpName = name;
+
+            for (int ipc = 0; ipc < invalidPathChars.Length; ipc++)
+            {
+                cleanedUpName = cleanedUpName.Replace(invalidPathChars[ipc], string.Empty);
+            }
+
+            // Also remove any ":" in case there are drive letters in the path (like, again, in Soul Calibur 2)
+
+            cleanedUpName = cleanedUpName.Replace(":", string.Empty);
+
+            return cleanedUpName;
         }
     }
 }
