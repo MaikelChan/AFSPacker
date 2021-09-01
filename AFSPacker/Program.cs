@@ -41,7 +41,7 @@ namespace AFSPacker
                     for (int e = 0; e < metadata.Entries.Length; e++)
                     {
                         string fileNamePath = Path.Combine(args[1], metadata.Entries[e].Name);
-                        afs.AddEntryFromFile(fileNamePath, metadata.Entries[e].RawName);
+                        afs.AddEntry(metadata.Entries[e].RawName, fileNamePath);
                     }
 
                     using (FileStream outputStream = File.Create(args[2]))
