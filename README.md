@@ -6,6 +6,9 @@ AFS Packer is powered by [AFSLib](https://github.com/MaikelChan/AFSLib), a libra
 ## Requirements
 The program requires the [.NET Core Runtime 3.1](https://dotnet.microsoft.com/download/dotnet-core/3.1) and it works on Windows, Linux and MacOS.
 
+## Changelog
+You can check the changelog [here](https://github.com/MaikelChan/AFSPacker/blob/v2/CHANGELOG.md).
+
 ## Usage
 ```
 AFSPacker -e <input_afs_file> <output_dir>  :  Extract AFS archive
