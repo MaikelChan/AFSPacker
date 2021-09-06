@@ -43,18 +43,23 @@ namespace AFSPacker
                     {
                         IsNull = true,
                         Name = string.Empty,
-                        FileName = string.Empty
+                        FileName = string.Empty,
+                        HasUnknownAttribute = false,
+                        UnknownAttribute = 0
                     };
                 }
                 else
                 {
                     DataEntry dataEntry = afs.Entries[e] as DataEntry;
+                    bool hasUnknownAttribute = afs.ContainsAttributes && dataEntry.HasUnknownAttribute;
 
                     Entries[e] = new AFSMetadataEntry()
                     {
                         IsNull = false,
                         Name = dataEntry.Name,
-                        FileName = dataEntry.SanitizedName
+                        FileName = dataEntry.SanitizedName,
+                        HasUnknownAttribute = hasUnknownAttribute,
+                        UnknownAttribute = hasUnknownAttribute ? dataEntry.UnknownAttribute : 0
                     };
                 }
             }
@@ -125,6 +130,7 @@ namespace AFSPacker
 
         /// <summary>
         /// Added EntryBlockAlignment and NullEntry support.
+        /// Added HasUnknownAttribute and UnknownAttribute properties.
         /// Renamed Name to FileName and RawName to Name.
         /// </summary>
         void Migrate_1_2()
@@ -137,6 +143,8 @@ namespace AFSPacker
                 Entries[e].FileName = Entries[e].Name;
                 Entries[e].Name = Entries[e].RawName;
                 Entries[e].RawName = null;
+                Entries[e].HasUnknownAttribute = false;
+                Entries[e].UnknownAttribute = 0;
             }
         }
 

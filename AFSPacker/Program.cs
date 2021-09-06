@@ -49,7 +49,12 @@ namespace AFSPacker
                             else
                             {
                                 string filePath = Path.Combine(args[1], metadata.Entries[e].FileName);
-                                afs.AddEntryFromFile(filePath, metadata.Entries[e].Name);
+                                FileEntry fileEntry = afs.AddEntryFromFile(filePath, metadata.Entries[e].Name);
+
+                                if (metadata.Entries[e].HasUnknownAttribute)
+                                {
+                                    fileEntry.UnknownAttribute = metadata.Entries[e].UnknownAttribute;
+                                }
                             }
                         }
 
