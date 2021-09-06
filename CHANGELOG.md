@@ -6,6 +6,17 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [2.1.0] - 2021-09-06
+### Added
+- Entry block alignment is now configurable.
+- Implemented null entries, which are entries that have no data. Some games have entries like that. This was implemented in 1.x versions of AFSPacker, but wasn't present in 2.0.0.
+
+### Changed
+- Metadata format has been upgraded from v1 to v2, which include several changes. This is not a problem for existing projects, as any v1 metadata.json will be upgraded automatically to v2.
+
+### Fixed
+- More checks to avoid an entry name having more than 32 characters.
+
 ## [2.0.0] - 2021-09-01
 ### Changed
 - Complete rewrite. Now it's easier to use, it's able to handle more AFS variations and can recreate them in the exact same format variation as in the original AFS archive. It doesn't require any extra input or configuration by the user. All necessary data to recreate the AFS is stored in a metadata.json file.
