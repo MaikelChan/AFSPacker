@@ -32,21 +32,28 @@ namespace AFSPacker
 
                     AFSMetadata metadata = AFSMetadata.LoadFromFile(args[1] + ".json");
 
-                    AFS afs = new AFS();
-                    afs.NotifyProgress += Progress;
-
-                    afs.HeaderMagicType = metadata.HeaderMagicType;
-                    afs.AttributesInfoType = metadata.AttributesInfoType;
-
-                    for (int e = 0; e < metadata.Entries.Length; e++)
+                    using (AFS afs = new AFS())
                     {
-                        string fileNamePath = Path.Combine(args[1], metadata.Entries[e].Name);
-                        afs.AddEntry(metadata.Entries[e].RawName, fileNamePath);
-                    }
+                        afs.NotifyProgress += Progress;
 
-                    using (FileStream outputStream = File.Create(args[2]))
-                    {
-                        afs.SaveToStream(outputStream);
+                        afs.HeaderMagicType = metadata.HeaderMagicType;
+                        afs.AttributesInfoType = metadata.AttributesInfoType;
+                        afs.EntryBlockAlignment = metadata.EntryBlockAlignment;
+
+                        for (int e = 0; e < metadata.Entries.Length; e++)
+                        {
+                            if (metadata.Entries[e].IsNull)
+                            {
+                                afs.AddNullEntry();
+                            }
+                            else
+                            {
+                                string filePath = Path.Combine(args[1], metadata.Entries[e].FileName);
+                                afs.AddEntryFromFile(filePath, metadata.Entries[e].Name);
+                            }
+                        }
+
+                        afs.SaveToFile(args[2]);
                     }
                 }
                 else if (args[0] == "-e")
@@ -57,12 +64,11 @@ namespace AFSPacker
                         return;
                     }
 
-                    using (FileStream afsStream = File.OpenRead(args[1]))
+                    using (AFS afs = new AFS(args[1]))
                     {
-                        AFS afs = new AFS(afsStream);
                         afs.NotifyProgress += Progress;
 
-                        afs.ExtractAllEntries(args[2]);
+                        afs.ExtractAllEntriesToDirectory(args[2]);
 
                         AFSMetadata metadata = new AFSMetadata(afs);
                         metadata.SaveToFile(args[2] + ".json");
@@ -76,18 +82,18 @@ namespace AFSPacker
                         return;
                     }
 
-                    using (FileStream afsStream = File.OpenRead(args[1]))
+                    using (AFS afs = new AFS(args[1]))
                     {
-                        AFS afs = new AFS(afsStream);
                         ReadOnlyCollection<Entry> entries = afs.Entries;
 
                         Console.ForegroundColor = ConsoleColor.White;
 
                         Console.WriteLine();
-                        Console.WriteLine($"File name            : {Path.GetFileName(args[1])}");
-                        Console.WriteLine($"Header magic         : {afs.HeaderMagicType}");
-                        Console.WriteLine($"Attributes info type : {afs.AttributesInfoType}");
-                        Console.WriteLine($"Number of entries    : {afs.EntryCount}");
+                        Console.WriteLine($"File name             : {Path.GetFileName(args[1])}");
+                        Console.WriteLine($"Header magic          : {afs.HeaderMagicType}");
+                        Console.WriteLine($"Attributes info type  : {afs.AttributesInfoType}");
+                        Console.WriteLine($"Entry Block Alignment : {afs.EntryBlockAlignment}");
+                        Console.WriteLine($"Number of entries     : {afs.EntryCount}");
 
                         Console.WriteLine();
                         Console.WriteLine(" Index    | Name                             | Size       | Last Write Time");
@@ -99,7 +105,7 @@ namespace AFSPacker
 
                             string index = e.ToString("00000000");
 
-                            if (entries[e] == null)
+                            if (entries[e] is NullEntry)
                             {
                                 string name = "(null)".PadRight(32);
                                 string size = "N/A".PadRight(10);
@@ -109,9 +115,11 @@ namespace AFSPacker
                             }
                             else
                             {
-                                string name = afs.ContainsAttributes ? entries[e].RawName.PadRight(32) : "N/A".PadRight(32);
-                                string size = entries[e].Size.ToString("X8");
-                                string time = afs.ContainsAttributes ? entries[e].LastWriteTime.ToString() : "N/A";
+                                DataEntry dataEntry = entries[e] as DataEntry;
+
+                                string name = afs.ContainsAttributes ? dataEntry.Name.PadRight(32) : "N/A".PadRight(32);
+                                string size = dataEntry.Size.ToString("X8");
+                                string time = afs.ContainsAttributes ? dataEntry.LastWriteTime.ToString() : "N/A";
 
                                 Console.WriteLine($" {index} | {name} | 0x{size} | {time}");
                             }

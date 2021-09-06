@@ -1,9 +1,17 @@
-﻿
+﻿using System.Text.Json.Serialization;
+
 namespace AFSPacker
 {
-    public struct AFSMetadataEntry
+    public class AFSMetadataEntry
     {
-        public string RawName { get; set; }
-        public string Name { get; set; }
+        public bool IsNull { get; set; } = false;
+        public string Name { get; set; } = string.Empty;
+        public string FileName { get; set; } = string.Empty;
+
+        #region Deprecated
+
+        public string RawName { get; set; } = null;
+
+        #endregion
     }
 }
