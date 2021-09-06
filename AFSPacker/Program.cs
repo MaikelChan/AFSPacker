@@ -101,8 +101,8 @@ namespace AFSPacker
                         Console.WriteLine($"Number of entries     : {afs.EntryCount}");
 
                         Console.WriteLine();
-                        Console.WriteLine(" Index    | Name                             | Size       | Last Write Time");
-                        Console.WriteLine(" ---------------------------------------------------------------------------------");
+                        Console.WriteLine(" Index    | Name                             | Size       | Unknown Attribute | Last Write Time");
+                        Console.WriteLine(" -----------------------------------------------------------------------------------------------------");
 
                         for (int e = 0; e < afs.EntryCount; e++)
                         {
@@ -114,19 +114,21 @@ namespace AFSPacker
                             {
                                 string name = "(null)".PadRight(32);
                                 string size = "N/A".PadRight(10);
+                                string unknown = "N/A".PadRight(17);
                                 string time = "N/A";
 
-                                Console.WriteLine($" {index} | {name} | {size} | {time}");
+                                Console.WriteLine($" {index} | {name} | {size} | {unknown} | {time}");
                             }
                             else
                             {
                                 DataEntry dataEntry = entries[e] as DataEntry;
 
                                 string name = afs.ContainsAttributes ? dataEntry.Name.PadRight(32) : "N/A".PadRight(32);
-                                string size = dataEntry.Size.ToString("X8");
+                                string size = "0x" + dataEntry.Size.ToString("X8");
+                                string unknown = afs.ContainsAttributes ? "0x" + dataEntry.UnknownAttribute.ToString("X8").PadRight(15) : "N/A".PadRight(17);
                                 string time = afs.ContainsAttributes ? dataEntry.LastWriteTime.ToString() : "N/A";
 
-                                Console.WriteLine($" {index} | {name} | 0x{size} | {time}");
+                                Console.WriteLine($" {index} | {name} | {size} | {unknown} | {time}");
                             }
                         }
                     }
