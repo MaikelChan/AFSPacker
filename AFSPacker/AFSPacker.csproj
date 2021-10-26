@@ -6,11 +6,11 @@
     <RuntimeIdentifier>win-x64</RuntimeIdentifier>
     <PublishSingleFile>true</PublishSingleFile>
     <SelfContained>false</SelfContained>
-    <Version>2.1.0</Version>
+    <Version>2.1.1</Version>
     <Authors>MaikelChan / PacoChan</Authors>
     <Company>MaikelChan / PacoChan</Company>
     <Description>Tool to extract and create AFS files.</Description>
-    <AssemblyVersion>2.1.0.0</AssemblyVersion>
+    <AssemblyVersion>2.1.1.0</AssemblyVersion>
   </PropertyGroup>
 
   <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Release|AnyCPU'">

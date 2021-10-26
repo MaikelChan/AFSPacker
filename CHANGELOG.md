@@ -6,6 +6,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [2.1.1] - 2021-10-26
+### Fixed
+- Fixed regression: now it's able to handle AFS files with invalid dates.
+
 ## [2.1.0] - 2021-09-06
 ### Added
 - Entry block alignment is now configurable.
