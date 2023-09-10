@@ -2,6 +2,7 @@
 using System;
 using System.IO;
 using System.Text.Json;
+using System.Text.Json.Serialization;
 
 namespace AFSPacker
 {
@@ -11,10 +12,11 @@ namespace AFSPacker
 
         public HeaderMagicType HeaderMagicType { get; set; }
         public AttributesInfoType AttributesInfoType { get; set; }
+        public bool AllAttributesContainEntrySize { get; set; }
         public uint EntryBlockAlignment { get; set; }
         public AFSMetadataEntry[] Entries { get; set; }
 
-        const uint CURRENT_VERSION = 2;
+        const uint CURRENT_VERSION = 3;
 
         public AFSMetadata()
         {
@@ -32,6 +34,7 @@ namespace AFSPacker
 
             HeaderMagicType = afs.HeaderMagicType;
             AttributesInfoType = afs.AttributesInfoType;
+            AllAttributesContainEntrySize = afs.AllAttributesContainEntrySize;
             EntryBlockAlignment = afs.EntryBlockAlignment;
             Entries = new AFSMetadataEntry[afs.EntryCount];
 
@@ -44,22 +47,19 @@ namespace AFSPacker
                         IsNull = true,
                         Name = string.Empty,
                         FileName = string.Empty,
-                        HasUnknownAttribute = false,
-                        UnknownAttribute = 0
+                        CustomData = 0
                     };
                 }
                 else
                 {
                     DataEntry dataEntry = afs.Entries[e] as DataEntry;
-                    bool hasUnknownAttribute = afs.ContainsAttributes && dataEntry.HasUnknownAttribute;
 
                     Entries[e] = new AFSMetadataEntry()
                     {
                         IsNull = false,
                         Name = dataEntry.Name,
                         FileName = dataEntry.SanitizedName,
-                        HasUnknownAttribute = hasUnknownAttribute,
-                        UnknownAttribute = hasUnknownAttribute ? dataEntry.UnknownAttribute : 0
+                        CustomData = dataEntry.CustomData
                     };
                 }
             }
@@ -70,7 +70,7 @@ namespace AFSPacker
             JsonSerializerOptions options = new JsonSerializerOptions()
             {
                 WriteIndented = true,
-                IgnoreNullValues = true
+                DefaultIgnoreCondition = JsonIgnoreCondition.WhenWritingNull
             };
 
             string metadataContents = JsonSerializer.Serialize(this, options);
@@ -92,7 +92,7 @@ namespace AFSPacker
             };
 
             AFSMetadata metadata = JsonSerializer.Deserialize<AFSMetadata>(metadataContents, options);
-            bool hasBeenMigrated = metadata.Migrate();
+            bool hasBeenMigrated = metadata.Migrate(Path.ChangeExtension(metadataFileNamePath, null));
 
             if (hasBeenMigrated)
             {
@@ -104,23 +104,24 @@ namespace AFSPacker
 
         #region Metadata Migration
 
-        Action[] migrationMethods;
+        Action<string>[] migrationMethods;
 
-        private bool Migrate()
+        private bool Migrate(string metadataPath)
         {
             if (MetadataVersion == CURRENT_VERSION) return false;
 
             if (migrationMethods == null)
             {
-                migrationMethods = new Action[]
+                migrationMethods = new Action<string>[]
                 {
-                    Migrate_1_2
+                    Migrate_1_2,
+                    Migrate_2_3
                 };
             }
 
             for (uint v = MetadataVersion - 1; v < CURRENT_VERSION - 1; v++)
             {
-                migrationMethods[v]();
+                migrationMethods[v](metadataPath);
             }
 
             MetadataVersion = CURRENT_VERSION;
@@ -133,7 +134,7 @@ namespace AFSPacker
         /// Added HasUnknownAttribute and UnknownAttribute properties.
         /// Renamed Name to FileName and RawName to Name.
         /// </summary>
-        void Migrate_1_2()
+        void Migrate_1_2(string metadataPath)
         {
             EntryBlockAlignment = 0x800;
 
@@ -146,6 +147,36 @@ namespace AFSPacker
                 Entries[e].HasUnknownAttribute = false;
                 Entries[e].UnknownAttribute = 0;
             }
+        }
+
+        /// <summary>
+        /// Renamed UnkownAttribute to CustomData.
+        /// Deleted HasUnknownAttribute.
+        /// Added AttributesContainEntrySize property.
+        /// </summary>
+        void Migrate_2_3(string metadataPath)
+        {
+            bool allAttributesContainEntrySize = true;
+
+            for (int e = 0; e < Entries.Length; e++)
+            {
+                if (Entries[e].HasUnknownAttribute.HasValue && Entries[e].HasUnknownAttribute.Value)
+                {
+                    allAttributesContainEntrySize = false;
+                    Entries[e].CustomData = Entries[e].UnknownAttribute.HasValue ? Entries[e].UnknownAttribute.Value : 0;
+                }
+                else
+                {
+                    string entryFilePath = Path.Combine(metadataPath, Entries[e].FileName);
+                    FileInfo info = new FileInfo(entryFilePath);
+                    Entries[e].CustomData = (uint)info.Length;
+                }
+
+                Entries[e].UnknownAttribute = null;
+                Entries[e].HasUnknownAttribute = null;
+            }
+
+            AllAttributesContainEntrySize = allAttributesContainEntrySize;
         }
 
         #endregion

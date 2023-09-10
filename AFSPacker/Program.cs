@@ -51,10 +51,8 @@ namespace AFSPacker
                                 string filePath = Path.Combine(args[1], metadata.Entries[e].FileName);
                                 FileEntry fileEntry = afs.AddEntryFromFile(filePath, metadata.Entries[e].Name);
 
-                                if (metadata.Entries[e].HasUnknownAttribute)
-                                {
-                                    fileEntry.UnknownAttribute = metadata.Entries[e].UnknownAttribute;
-                                }
+                                if (!metadata.AllAttributesContainEntrySize)
+                                    fileEntry.CustomData = metadata.Entries[e].CustomData;
                             }
                         }
 
@@ -94,14 +92,14 @@ namespace AFSPacker
                         Console.ForegroundColor = ConsoleColor.White;
 
                         Console.WriteLine();
-                        Console.WriteLine($"File name             : {Path.GetFileName(args[1])}");
-                        Console.WriteLine($"Header magic          : {afs.HeaderMagicType}");
-                        Console.WriteLine($"Attributes info type  : {afs.AttributesInfoType}");
-                        Console.WriteLine($"Entry Block Alignment : {afs.EntryBlockAlignment}");
-                        Console.WriteLine($"Number of entries     : {afs.EntryCount}");
+                        Console.WriteLine($" File name             : {Path.GetFileName(args[1])}");
+                        Console.WriteLine($" Header magic          : {afs.HeaderMagicType}");
+                        Console.WriteLine($" Attributes info type  : {afs.AttributesInfoType}");
+                        Console.WriteLine($" Entry Block Alignment : {afs.EntryBlockAlignment}");
+                        Console.WriteLine($" Number of entries     : {afs.EntryCount}");
 
                         Console.WriteLine();
-                        Console.WriteLine(" Index    | Name                             | Size       | Unknown Attribute | Last Write Time");
+                        Console.WriteLine(" Index    | Name                             | Size       | Custom Data | Last Write Time");
                         Console.WriteLine(" -----------------------------------------------------------------------------------------------------");
 
                         for (int e = 0; e < afs.EntryCount; e++)
@@ -114,10 +112,10 @@ namespace AFSPacker
                             {
                                 string name = "(null)".PadRight(32);
                                 string size = "N/A".PadRight(10);
-                                string unknown = "N/A".PadRight(17);
+                                string customData = "N/A".PadRight(11);
                                 string time = "N/A";
 
-                                Console.WriteLine($" {index} | {name} | {size} | {unknown} | {time}");
+                                Console.WriteLine($" {index} | {name} | {size} | {customData} | {time}");
                             }
                             else
                             {
@@ -125,10 +123,10 @@ namespace AFSPacker
 
                                 string name = afs.ContainsAttributes ? dataEntry.Name.PadRight(32) : "N/A".PadRight(32);
                                 string size = "0x" + dataEntry.Size.ToString("X8");
-                                string unknown = afs.ContainsAttributes ? "0x" + dataEntry.UnknownAttribute.ToString("X8").PadRight(15) : "N/A".PadRight(17);
+                                string customData = afs.ContainsAttributes ? "0x" + dataEntry.CustomData.ToString("X8").PadRight(9) : "N/A".PadRight(11);
                                 string time = afs.ContainsAttributes ? dataEntry.LastWriteTime.ToString() : "N/A";
 
-                                Console.WriteLine($" {index} | {name} | {size} | {unknown} | {time}");
+                                Console.WriteLine($" {index} | {name} | {size} | {customData} | {time}");
                             }
                         }
                     }
