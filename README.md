@@ -10,7 +10,7 @@ AFS Packer can extract the files inside an AFS archive to a folder, or generate 
 AFS Packer is powered by [AFSLib](https://github.com/MaikelChan/AFSLib), a library that can extract, create and manipulate AFS files.
 
 ## Requirements
-The program requires the [.NET Core Runtime 3.1](https://dotnet.microsoft.com/download/dotnet-core/3.1) and it works on Windows, Linux and MacOS.
+The program requires the [.NET Runtime 6](https://dotnet.microsoft.com/download/dotnet/6.0) and it works on Windows, Linux and MacOS.
 
 ## Changelog
 You can check the changelog [here](https://github.com/MaikelChan/AFSPacker/blob/v2/CHANGELOG.md).
